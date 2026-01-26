@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目详情 - 漫剧项目管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            900: '#0f0f0f',
+                            800: '#1a1a1a',
+                            700: '#2a2a2a',
+                            600: '#3a3a3a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- 顶部导航 -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- 返回和标题 -->
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                    </a>
+                    <h1 id="project-title" class="text-xl font-bold">加载中...</h1>
+                    <span id="project-phase" class="px-2 py-1 text-xs rounded-full bg-gray-600 text-gray-300">--</span>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="flex items-center space-x-4">
+                    <button id="refresh-btn" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="刷新">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                    <button id="delete-btn" class="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors" title="删除项目">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区域 -->
+    <div class="flex">
+        <!-- 侧边栏导航 -->
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 min-h-[calc(100vh-4rem)] sticky top-16">
+            <nav class="p-4 space-y-2">
+                <button data-tab="overview" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-600 text-white">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span>概览</span>
+                </button>
+                <button data-tab="characters" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <span>人物</span>
+                    <span id="characters-count" class="ml-auto text-xs bg-gray-700 px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button data-tab="clues" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span>线索</span>
+                    <span id="clues-count" class="ml-auto text-xs bg-gray-700 px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button data-tab="episodes" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                    </svg>
+                    <span>剧集/场景</span>
+                    <span id="episodes-count" class="ml-auto text-xs bg-gray-700 px-2 py-0.5 rounded-full">0</span>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- 内容区域 -->
+        <main class="flex-1 p-8">
+            <!-- 加载状态 -->
+            <div id="loading" class="hidden">
+                <div class="flex items-center justify-center py-12">
+                    <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="ml-3 text-gray-400">加载中...</span>
+                </div>
+            </div>
+
+            <!-- 概览 Tab -->
+            <div id="tab-overview" class="tab-content">
+                <div class="max-w-3xl space-y-8">
+                    <!-- 项目信息 -->
+                    <section class="bg-gray-800 rounded-lg p-6">
+                        <h2 class="text-lg font-semibold mb-4">项目信息</h2>
+                        <form id="project-info-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">项目标题</label>
+                                <input type="text" id="edit-title" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">视觉风格</label>
+                                <textarea id="edit-style" rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"></textarea>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                                    保存更改
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <!-- 进度统计 -->
+                    <section class="bg-gray-800 rounded-lg p-6">
+                        <h2 class="text-lg font-semibold mb-4">进度统计</h2>
+                        <div id="progress-stats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- 进度卡片将通过 JS 插入 -->
+                        </div>
+                    </section>
+
+                    <!-- 源文件管理 -->
+                    <section class="bg-gray-800 rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-semibold">📄 源文件</h2>
+                            <div class="flex space-x-2">
+                                <button id="new-source-btn" class="flex items-center space-x-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    <span>新建</span>
+                                </button>
+                                <label class="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors cursor-pointer">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    <span>上传</span>
+                                    <input type="file" id="source-upload-input" accept=".txt,.md" class="hidden">
+                                </label>
+                            </div>
+                        </div>
+                        <div id="source-files-list" class="space-y-2">
+                            <p class="text-gray-500 text-sm">加载中...</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- 人物 Tab -->
+            <div id="tab-characters" class="tab-content hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold">人物管理</h2>
+                    <button id="add-character-btn" class="flex items-center space-x-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>添加人物</span>
+                    </button>
+                </div>
+                <div id="characters-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 人物卡片将通过 JS 插入 -->
+                </div>
+            </div>
+
+            <!-- 线索 Tab -->
+            <div id="tab-clues" class="tab-content hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold">线索管理</h2>
+                    <button id="add-clue-btn" class="flex items-center space-x-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>添加线索</span>
+                    </button>
+                </div>
+                <div id="clues-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 线索卡片将通过 JS 插入 -->
+                </div>
+            </div>
+
+            <!-- 剧集 Tab -->
+            <div id="tab-episodes" class="tab-content hidden">
+                <h2 class="text-lg font-semibold mb-6">剧集与场景</h2>
+                <div id="episodes-list" class="space-y-4">
+                    <!-- 剧集列表将通过 JS 插入 -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 人物编辑模态框 -->
+    <div id="character-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 id="character-modal-title" class="text-lg font-semibold">添加人物</h2>
+                <button class="close-modal p-1 text-gray-400 hover:text-white rounded">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="character-form" class="p-6 space-y-4">
+                <input type="hidden" id="char-edit-mode" value="add">
+                <input type="hidden" id="char-original-name" value="">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">人物名称 <span class="text-red-500">*</span></label>
+                    <input type="text" id="char-name" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">外貌描述 <span class="text-red-500">*</span></label>
+                    <textarea id="char-description" required rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none" placeholder="描述人物的外貌、服装、气质等"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">声音风格</label>
+                    <input type="text" id="char-voice" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="例如：沉稳，低沉，男性">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">人物设计图</label>
+                    <div id="char-image-drop" class="drop-zone rounded-lg p-6 text-center cursor-pointer">
+                        <div id="char-image-preview" class="hidden mb-4">
+                            <img src="" alt="预览" class="max-h-48 mx-auto rounded">
+                        </div>
+                        <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-400">点击或拖拽上传图片</p>
+                        <input type="file" id="char-image-input" accept="image/*" class="hidden">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 线索编辑模态框 -->
+    <div id="clue-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 id="clue-modal-title" class="text-lg font-semibold">添加线索</h2>
+                <button class="close-modal p-1 text-gray-400 hover:text-white rounded">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="clue-form" class="p-6 space-y-4">
+                <input type="hidden" id="clue-edit-mode" value="add">
+                <input type="hidden" id="clue-original-name" value="">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">线索名称 <span class="text-red-500">*</span></label>
+                    <input type="text" id="clue-name" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">类型</label>
+                    <select id="clue-type" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                        <option value="prop">道具</option>
+                        <option value="location">场景/环境</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">重要程度</label>
+                    <select id="clue-importance" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                        <option value="major">主要（生成设计图）</option>
+                        <option value="minor">次要（仅描述）</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">详细描述 <span class="text-red-500">*</span></label>
+                    <textarea id="clue-description" required rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none" placeholder="详细描述线索的外观特征"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">线索设计图</label>
+                    <div id="clue-image-drop" class="drop-zone rounded-lg p-6 text-center cursor-pointer">
+                        <div id="clue-image-preview" class="hidden mb-4">
+                            <img src="" alt="预览" class="max-h-48 mx-auto rounded">
+                        </div>
+                        <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-400">点击或拖拽上传图片</p>
+                        <input type="file" id="clue-image-input" accept="image/*" class="hidden">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg transition-colors">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 场景编辑模态框 -->
+    <div id="scene-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 id="scene-modal-title" class="text-lg font-semibold">编辑场景</h2>
+                <button class="close-modal p-1 text-gray-400 hover:text-white rounded">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="scene-form" class="p-6">
+                <input type="hidden" id="scene-id" value="">
+                <input type="hidden" id="scene-script-file" value="">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 左侧：预览 -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">分镜图</label>
+                            <div id="scene-storyboard" class="aspect-video bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                <span class="text-gray-500">暂无分镜图</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">视频预览</label>
+                            <div id="scene-video" class="aspect-video bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                <span class="text-gray-500">暂无视频</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 右侧：表单 -->
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">时长（秒）</label>
+                                <input type="number" id="scene-duration" min="1" max="60" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">分段标记</label>
+                                <select id="scene-segment-break" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                    <option value="false">否</option>
+                                    <option value="true">是（添加转场）</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">视觉描述</label>
+                            <textarea id="scene-visual-desc" rows="4" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">镜头类型</label>
+                                <input type="text" id="scene-shot-type" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="例如：medium shot">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">氛围</label>
+                                <input type="text" id="scene-mood" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="例如：tense, dramatic">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">对话内容</label>
+                            <textarea id="scene-dialogue" rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">说话人</label>
+                            <input type="text" id="scene-speaker" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 pt-6 mt-6 border-t border-gray-700">
+                    <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 图片放大 Lightbox -->
+    <div id="image-lightbox" class="hidden fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+        <button id="lightbox-close-btn" class="absolute top-4 right-4 text-white hover:text-gray-300 text-3xl">&times;</button>
+        <img id="lightbox-image" class="max-w-[90vw] max-h-[90vh] object-contain" src="" alt="">
+        <div id="lightbox-title" class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-lg bg-black bg-opacity-50 px-4 py-2 rounded"></div>
+    </div>
+
+    <!-- Source 文件编辑模态框 -->
+    <div id="source-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 id="source-modal-title" class="text-lg font-semibold">编辑源文件</h2>
+                <button class="close-modal p-1 text-gray-400 hover:text-white rounded">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="source-form" class="flex-1 flex flex-col overflow-hidden p-6">
+                <input type="hidden" id="source-original-name" value="">
+                <div class="mb-4" id="source-name-row">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">文件名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="source-filename" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="example.txt">
+                </div>
+                <div class="flex-1 flex flex-col min-h-0">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">内容</label>
+                    <textarea id="source-content" class="flex-1 w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white font-mono text-sm resize-none focus:outline-none focus:border-blue-500" style="min-height: 400px;"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/js/api.js"></script>
+    <script src="/js/project.js"></script>
+</body>
+</html>

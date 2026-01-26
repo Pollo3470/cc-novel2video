@@ -1,0 +1,10 @@
+# AI Anime Generator Dependencies
+google-genai>=0.5.0
+Pillow>=10.0.0
+ffmpeg-python>=0.2.0
+python-dotenv>=1.0.0
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-multipart>=0.0.6
