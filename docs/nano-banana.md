@@ -595,7 +595,7 @@ Builds on character consistency and scene description to create panels for visua
     image_input = Image.open('/path/to/your/man_in_white_glasses.jpg')
     text_input = "Make a 3 panel comic in a gritty, noir art style with high-contrast black and white inks. Put the character in a humurous scene."
 
-    response = client.models.generate_content(
+    response = client.models.generate _content(
         model="gemini-3-pro-image-preview",
         contents=[text_input, image_input],
     )

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>项目详情 - 漫剧项目管理</title>
+    <title>项目详情 - 视频项目管理</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -23,6 +23,7 @@
         }
     </script>
     <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
     <!-- 顶部导航 -->
@@ -60,7 +61,7 @@
     <!-- 主内容区域 -->
     <div class="flex">
         <!-- 侧边栏导航 -->
-        <aside class="w-64 bg-gray-800 border-r border-gray-700 min-h-[calc(100vh-4rem)] sticky top-16">
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 h-[calc(100vh-4rem)] fixed top-16 left-0 overflow-y-auto">
             <nav class="p-4 space-y-2">
                 <button data-tab="overview" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-600 text-white">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -93,7 +94,7 @@
         </aside>
 
         <!-- 内容区域 -->
-        <main class="flex-1 p-8">
+        <main class="flex-1 p-8 ml-64">
             <!-- 加载状态 -->
             <div id="loading" class="hidden">
                 <div class="flex items-center justify-center py-12">
@@ -120,9 +121,58 @@
                                 <label class="block text-sm font-medium text-gray-300 mb-1">视觉风格</label>
                                 <textarea id="edit-style" rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"></textarea>
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">内容模式</label>
+                                <select id="edit-content-mode" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                    <option value="narration">说书+画面（9:16 竖屏）</option>
+                                    <option value="drama">剧集动画（16:9 横屏）</option>
+                                </select>
+                                <p id="aspect-ratio-hint" class="mt-1 text-xs text-gray-500">分镜/视频: 9:16 | 设计图/宫格: 16:9</p>
+                            </div>
                             <div class="flex justify-end">
                                 <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
                                     保存更改
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <!-- 故事概述 -->
+                    <section class="bg-gray-800 rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-semibold">📖 故事概述</h2>
+                            <button id="regenerate-overview-btn" class="flex items-center space-x-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>重新生成</span>
+                            </button>
+                        </div>
+                        <div id="overview-empty-state" class="hidden text-center py-8 text-gray-500">
+                            <p>上传源文件后自动生成故事概述</p>
+                        </div>
+                        <form id="overview-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">故事梗概</label>
+                                <textarea id="edit-synopsis" rows="4" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none" placeholder="200-300字的主线剧情概要"></textarea>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="edit-genre" class="block text-sm font-medium text-gray-300 mb-1">题材类型</label>
+                                    <input type="text" id="edit-genre" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="如：古装宫斗、现代悬疑">
+                                </div>
+                                <div>
+                                    <label for="edit-theme" class="block text-sm font-medium text-gray-300 mb-1">核心主题</label>
+                                    <input type="text" id="edit-theme" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="如：复仇与救赎、成长蜕变">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="edit-world-setting" class="block text-sm font-medium text-gray-300 mb-1">世界观设定</label>
+                                <textarea id="edit-world-setting" rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none" placeholder="时代背景、地点、特殊设定等"></textarea>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                                    保存修改
                                 </button>
                             </div>
                         </form>
@@ -354,27 +404,25 @@
                                 </select>
                             </div>
                         </div>
+                        <!-- 分镜图 Prompt -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">视觉描述</label>
-                            <textarea id="scene-visual-desc" rows="4" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"></textarea>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">
+                                分镜图 Prompt
+                                <span class="text-xs text-gray-500">（用于 Gemini 图像生成）</span>
+                            </label>
+                            <textarea id="scene-image-prompt" rows="4"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                placeholder="描述场景环境、人物姿态、光线氛围..."></textarea>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">镜头类型</label>
-                                <input type="text" id="scene-shot-type" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="例如：medium shot">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">氛围</label>
-                                <input type="text" id="scene-mood" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white" placeholder="例如：tense, dramatic">
-                            </div>
-                        </div>
+                        <!-- 视频 Prompt -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">对话内容</label>
-                            <textarea id="scene-dialogue" rows="3" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"></textarea>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">说话人</label>
-                            <input type="text" id="scene-speaker" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                            <label class="block text-sm font-medium text-gray-300 mb-1">
+                                视频 Prompt
+                                <span class="text-xs text-gray-500">（用于 Veo 视频生成）</span>
+                            </label>
+                            <textarea id="scene-video-prompt" rows="4"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                placeholder="镜头类型 + 场景环境 + 人物动作 + 对话/音效..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -415,6 +463,123 @@
                     <textarea id="source-content" class="flex-1 w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white font-mono text-sm resize-none focus:outline-none focus:border-blue-500" style="min-height: 400px;"></textarea>
                 </div>
                 <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 草稿编辑模态框 -->
+    <div id="draft-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 id="draft-modal-title" class="text-lg font-semibold">编辑草稿</h2>
+                <button class="close-modal p-1 text-gray-400 hover:text-white rounded">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="draft-form" class="flex-1 flex flex-col overflow-hidden p-6">
+                <input type="hidden" id="draft-episode" value="">
+                <input type="hidden" id="draft-step" value="">
+                <div class="flex-1 flex flex-col min-h-0">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-sm font-medium text-gray-300">内容 (Markdown)</label>
+                        <div class="flex space-x-1">
+                            <button type="button" id="draft-mode-edit" class="px-2 py-1 text-xs rounded bg-gray-600 text-gray-300 hover:bg-gray-500">编辑</button>
+                            <button type="button" id="draft-mode-preview" class="px-2 py-1 text-xs rounded bg-blue-600 text-white">预览</button>
+                        </div>
+                    </div>
+                    <textarea id="draft-content" class="hidden flex-1 w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white font-mono text-sm resize-none focus:outline-none focus:border-blue-500" style="min-height: 500px;"></textarea>
+                    <div id="draft-preview" class="flex-1 w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white text-sm overflow-auto markdown-body" style="min-height: 500px;"></div>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 片段编辑模态框（说书模式） -->
+    <div id="segment-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+                <h2 class="text-lg font-semibold">编辑片段 <span id="segment-modal-id" class="text-blue-400"></span></h2>
+                <button class="close-modal p-1 text-gray-400 hover:text-white rounded">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="segment-form" class="p-6">
+                <input type="hidden" id="segment-id" value="">
+                <input type="hidden" id="segment-script-file" value="">
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 左侧：预览 -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">分镜图预览</label>
+                            <div id="segment-storyboard" class="aspect-portrait bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center max-w-[240px]">
+                                <span class="text-gray-500">暂无分镜图</span>
+                            </div>
+                        </div>
+                        <!-- 小说原文（只读） -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">小说原文 <span class="text-xs text-gray-500">（只读，用于后期配音）</span></label>
+                            <div id="segment-novel-text" class="bg-gray-900 p-3 rounded-lg text-gray-300 italic text-sm min-h-[80px]"></div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：表单 -->
+                    <div class="space-y-4">
+                        <!-- 时长选择 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">时长</label>
+                            <select id="segment-duration" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                <option value="4">4 秒</option>
+                                <option value="6">6 秒</option>
+                                <option value="8">8 秒</option>
+                            </select>
+                        </div>
+
+                        <!-- 分镜图 Prompt -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">
+                                分镜图 Prompt
+                                <span class="text-xs text-gray-500">（用于 Gemini 图像生成）</span>
+                            </label>
+                            <textarea id="segment-image-prompt" rows="4"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                placeholder="描述场景环境、人物姿态、光线氛围..."></textarea>
+                        </div>
+
+                        <!-- 视频 Prompt -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">
+                                视频 Prompt
+                                <span class="text-xs text-gray-500">（用于 Veo 视频生成）</span>
+                            </label>
+                            <textarea id="segment-video-prompt" rows="4"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                placeholder="镜头类型 + 场景环境 + 人物动作 + 对话/音效..."></textarea>
+                        </div>
+
+                        <!-- 分段标记 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">分段标记</label>
+                            <select id="segment-break" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                <option value="false">否</option>
+                                <option value="true">是（添加转场）</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-6 mt-6 border-t border-gray-700">
                     <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">保存</button>
                 </div>

@@ -1,11 +1,11 @@
 ---
 name: manga-workflow
-description: 完整的端到端工作流程，将小说转换为漫剧视频。使用场景：(1) 用户运行 /manga-workflow 命令，(2) 用户想开始新的漫剧视频项目，(3) 用户想继续现有项目。按顺序编排所有其他 skill，并在每个阶段设置审核检查点。
+description: 完整的端到端工作流程，将小说转换为视频。使用场景：(1) 用户运行 /manga-workflow 命令，(2) 用户想开始新的视频项目，(3) 用户想继续现有项目。按顺序编排所有其他 skill，并在每个阶段设置审核检查点。
 ---
 
-# 漫剧工作流
+# 视频工作流
 
-完整的端到端工作流程，将小说转换为漫剧视频。
+完整的端到端工作流程，将小说转换为视频。
 
 ## 快速开始
 
@@ -36,8 +36,8 @@ description: 完整的端到端工作流程，将小说转换为漫剧视频。�
   │
   ├─ 检查项目状态 (project.json)
   │   │
-  │   ├─ 没有剧本？ ────────► /novel-to-script ──► 审核 ──┐
-  │   │                                                   │
+  │   ├─ 没有剧本？ ────────► 调用 novel-to-storyboard-script agent ──► 审核 ──┐
+  │   │                                                              │
   │   ├─ 没有确认线索？ ───► 确认 clues 列表 ──► 更新 project.json ──┐
   │   │                                                              │
   │   ├─ 没有人物设计？ ────► /generate-characters ──► 审核 ──┐
@@ -51,6 +51,8 @@ description: 完整的端到端工作流程，将小说转换为漫剧视频。�
   │   └─ 准备合成？ ───────► /compose-video ──► 完成！
 ```
 
+> **项目概述**：上传源文件后，系统会自动分析小说内容并生成项目概述（故事梗概、题材类型、核心主题、世界观设定）。概述信息会保存到 `project.json` 的 `overview` 字段，供后续 Agent 参考，也便于用户在 WebUI 中快速了解项目。
+
 ## 阶段 1：项目设置
 
 新项目：
@@ -58,6 +60,7 @@ description: 完整的端到端工作流程，将小说转换为漫剧视频。�
 2. 创建 `projects/{名称}/` 及子目录（含 `clues/`）
 3. 创建 `project.json` 初始文件
 4. 请用户将小说文本放入 `source/`
+5. **上传后自动生成项目概述**（synopsis、genre、theme、world_setting）
 
 现有项目：
 1. 列出 `projects/` 中的项目
@@ -66,17 +69,25 @@ description: 完整的端到端工作流程，将小说转换为漫剧视频。�
 
 ## 阶段 2：剧本创建
 
-调用 `/novel-to-script`：
-- 分析小说文本
-- 提取人物和场景
-- 生成结构化 JSON 剧本
-- **识别潜在线索**（反复出现的重要物品和地点）
+使用 Task 工具调用 `novel-to-storyboard-script` agent（使用 Opus 模型）：
+- Agent 会执行严格的四步流程：
+  1. 规范化剧本（结构化整理）
+  2. 镜头预算（场景复杂度分析）
+  3. 角色表/线索表（详细描述生成）
+  4. 分镜表（最终 JSON 输出）
+- 每一步都需要用户确认后才继续
+- **Agent 会自动识别重要线索**（反复出现的重要物品和地点）
 
-**审核检查点**：展示剧本摘要和建议线索列表，等待确认。
+**审核检查点**：在 Agent 完成 Step 4 后，展示剧本摘要和线索列表，等待确认。
+
+**数据分层说明**：
+- Agent 会将角色和线索的**完整定义**同步到 `project.json`
+- `episode_N.json` 只保留 `characters_in_episode` 和 `clues_in_episode` 名称列表
+- 后续 skills（generate-characters、generate-storyboard）从 `project.json` 读取角色信息
 
 ## 阶段 3：线索确认
 
-在 `/novel-to-script` 完成后：
+在 agent 完成后：
 1. 展示自动识别的潜在线索列表
 2. 用户确认哪些需要固化
 3. 设置 `importance` 级别（major/minor）

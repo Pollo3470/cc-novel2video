@@ -35,167 +35,96 @@ from lib.project_manager import ProjectManager
 # Prompt 构建
 # ============================================================================
 
-def build_scene_prompt(scene: dict, characters: dict = None) -> str:
+def get_video_prompt(item: dict) -> str:
     """
-    根据场景数据构建符合 Veo 最佳实践的视频生成 prompt
+    获取视频生成 Prompt
 
-    Prompt 结构遵循 Veo prompt guide：
-    1. 开场 - 镜头构图(shot_type) + 场景描述(description)
-    2. 动作 - 人物在做什么(action)
-    3. 对话 - Speaker（manner）说道："text"
-    4. 音效 - 自然融入场景描述
-    5. 镜头运动 - camera_movement 的自然描述
-    6. 氛围 - lighting + mood
+    直接使用 video_prompt 字段内容。
 
     Args:
-        scene: 场景数据字典
-        characters: 可选的人物字典，用于获取声音风格
+        item: 片段/场景字典
 
     Returns:
-        构建的 prompt 字符串
+        video_prompt 字符串
     """
-    visual = scene.get('visual', {})
-    dialogue = scene.get('dialogue', {})
-    audio = scene.get('audio', {})
-
-    prompt_parts = []
-
-    # 1. 开场：镜头构图 + 场景描述
-    shot_type = visual.get('shot_type', '')
-    description = visual.get('description', '')
-
-    if shot_type and description:
-        prompt_parts.append(f"{shot_type}，{description}。")
-    elif description:
-        prompt_parts.append(f"{description}。")
-
-    # 2. 动作描述
-    action = scene.get('action', '')
-    if action:
-        prompt_parts.append(f"{action}。")
-
-    # 3. 对话（Veo 最佳格式）
-    if dialogue and dialogue.get('text'):
-        dialogue_str = _format_dialogue(dialogue, characters)
-        prompt_parts.append(dialogue_str)
-
-    # 4. 音效（自然融入场景描述）
-    sound_effects = audio.get('sound_effects', [])
-    if sound_effects:
-        effects_str = _format_sound_effects(sound_effects)
-        prompt_parts.append(effects_str)
-
-    # 5. 镜头运动
-    camera = visual.get('camera_movement', '')
-    if camera and camera != 'static':
-        camera_str = _format_camera_movement(camera)
-        prompt_parts.append(camera_str)
-
-    # 6. 氛围：光线和情绪
-    lighting = visual.get('lighting', '')
-    mood = visual.get('mood', '')
-    ambiance = _format_ambiance(lighting, mood)
-    if ambiance:
-        prompt_parts.append(ambiance)
-
-    return ' '.join(prompt_parts)
+    prompt = item.get('video_prompt', '')
+    if not prompt:
+        item_id = item.get('segment_id') or item.get('scene_id')
+        raise ValueError(f"片段/场景缺少 video_prompt 字段: {item_id}")
+    return prompt
 
 
-def _format_dialogue(dialogue: dict, characters: dict = None) -> str:
+def get_aspect_ratio(project_data: dict, asset_type: str) -> str:
     """
-    格式化对话为 Veo 最佳格式
+    根据项目配置获取画面比例（通过 API 参数传递，不写入 prompt）
 
-    Veo 格式: Speaker（emotion）说道："dialogue text"
+    Args:
+        project_data: project.json 数据
+        asset_type: "design" | "grid" | "storyboard" | "video"
+
+    Returns:
+        画面比例字符串，如 "16:9" 或 "9:16"
     """
-    speaker = dialogue.get('speaker', '人物')
-    text = dialogue['text']
-    emotion = dialogue.get('emotion', '')
+    content_mode = project_data.get('content_mode', 'narration') if project_data else 'narration'
 
-    # 获取声音风格（如果有）
-    voice_style = ''
-    if characters and speaker in characters:
-        voice_style = characters[speaker].get('voice_style', '')
-
-    # 处理内心独白
-    if text.startswith('（') and '）' in text:
-        inner_text = text.split('）', 1)[-1] if '）' in text else text
-        return f'{speaker}内心独白："{inner_text}"'
-
-    # 构建说话方式描述
-    manner_parts = []
-    if emotion:
-        manner_parts.append(_emotion_to_manner(emotion))
-    if voice_style:
-        manner_parts.append(voice_style)
-
-    if manner_parts:
-        manner = '，'.join(manner_parts)
-        return f'{speaker}（{manner}）说道："{text}"'
-    else:
-        return f'{speaker}说道："{text}"'
-
-
-def _emotion_to_manner(emotion: str) -> str:
-    """将 emotion 标签转换为说话方式描述"""
-    emotion_map = {
-        'happy': '开心地',
-        'sad': '悲伤地',
-        'angry': '愤怒地',
-        'surprised': '惊讶地',
-        'scared': '恐惧地',
-        'neutral': '平静地',
-        'determined': '坚定地',
-        'cold': '冷淡地',
-        'proud': '得意地',
-        'anxious': '焦虑地',
+    # 默认配置：说书模式使用竖屏，剧集动画模式使用横屏
+    defaults = {
+        "design": "16:9",
+        "grid": "16:9",
+        "storyboard": "9:16" if content_mode == 'narration' else "16:9",
+        "video": "9:16" if content_mode == 'narration' else "16:9"
     }
-    return emotion_map.get(emotion, emotion)
+
+    custom = project_data.get('aspect_ratio', {}) if project_data else {}
+    return custom.get(asset_type, defaults[asset_type])
 
 
-def _format_sound_effects(effects: list) -> str:
-    """格式化音效为自然描述"""
-    if len(effects) == 1:
-        return f"背景中传来{effects[0]}。"
-    elif len(effects) == 2:
-        return f"可以听到{effects[0]}和{effects[1]}。"
-    else:
-        effects_list = '、'.join(effects[:-1])
-        return f"环境音：{effects_list}，以及{effects[-1]}。"
+def get_items_from_script(script: dict) -> tuple:
+    """
+    根据内容模式获取场景/片段列表和相关字段名
+
+    Args:
+        script: 剧本数据
+
+    Returns:
+        (items_list, id_field, char_field, clue_field) 元组
+    """
+    content_mode = script.get('content_mode', 'narration')
+    if content_mode == 'narration' and 'segments' in script:
+        return (
+            script['segments'],
+            'segment_id',
+            'characters_in_segment',
+            'clues_in_segment'
+        )
+    return (
+        script.get('scenes', []),
+        'scene_id',
+        'characters_in_scene',
+        'clues_in_scene'
+    )
 
 
-def _format_camera_movement(camera: str) -> str:
-    """格式化镜头运动描述"""
-    camera_map = {
-        'pan left': '镜头向左平移。',
-        'pan right': '镜头向右平移。',
-        'tilt up': '镜头向上倾斜。',
-        'tilt down': '镜头向下倾斜。',
-        'dolly in': '镜头缓缓推进。',
-        'slow dolly in': '镜头缓缓推进。',
-        'dolly out': '镜头缓缓拉远。',
-        'track': '镜头跟随移动。',
-        'track left': '镜头向左跟踪移动。',
-        'track right': '镜头向右跟踪移动。',
-        'crane up': '镜头升起。',
-        'crane down': '镜头降落。',
-        'handheld': '手持镜头轻微晃动。',
-        'zoom in': '镜头变焦推进。',
-        'zoom out': '镜头变焦拉远。',
-    }
-    return camera_map.get(camera, f"镜头{camera}。")
+def validate_duration(duration: int) -> str:
+    """
+    验证并返回有效的时长参数
 
+    Veo API 仅支持 4s/6s/8s
 
-def _format_ambiance(lighting: str, mood: str) -> str:
-    """格式化光线和氛围描述"""
-    parts = []
-    if lighting:
-        parts.append(lighting)
-    if mood:
-        parts.append(f"{mood}的氛围")
+    Args:
+        duration: 输入的时长（秒）
 
-    if parts:
-        return '，'.join(parts) + '。'
-    return ''
+    Returns:
+        有效的时长字符串
+    """
+    valid_durations = [4, 6, 8]
+    if duration in valid_durations:
+        return str(duration)
+    # 向上取整到最近的有效值
+    for d in valid_durations:
+        if d >= duration:
+            return str(d)
+    return "8"  # 最大值
 
 
 # ============================================================================
@@ -324,19 +253,34 @@ def generate_episode_video(
     project_dir = pm.get_project_path(project_name)
     client = GeminiClient()
 
-    # 加载剧本
+    # 加载剧本和项目配置
     script = pm.load_script(project_name, script_filename)
+    project_data = None
+    if pm.project_exists(project_name):
+        try:
+            project_data = pm.load_project(project_name)
+        except Exception:
+            pass
 
-    # 筛选指定 episode 的场景
-    episode_scenes = [
-        s for s in script.get('scenes', [])
+    # 获取内容模式和画面比例
+    content_mode = script.get('content_mode', 'narration')
+    video_aspect_ratio = get_aspect_ratio(project_data, 'video')
+
+    # 根据内容模式选择数据源
+    all_items, id_field, _, _ = get_items_from_script(script)
+
+    # 筛选指定 episode 的场景/片段
+    episode_items = [
+        s for s in all_items
         if s.get('episode', 1) == episode
     ]
 
-    if not episode_scenes:
-        raise ValueError(f"未找到第 {episode} 集的场景")
+    if not episode_items:
+        raise ValueError(f"未找到第 {episode} 集的场景/片段")
 
-    print(f"📋 第 {episode} 集共 {len(episode_scenes)} 个场景")
+    item_type = "片段" if content_mode == 'narration' else "场景"
+    print(f"📋 第 {episode} 集共 {len(episode_items)} 个{item_type}")
+    print(f"📐 视频画面比例: {video_aspect_ratio}")
 
     # 加载或初始化 checkpoint
     completed_scenes = []
@@ -355,29 +299,32 @@ def generate_episode_video(
     videos_dir = project_dir / 'videos'
     videos_dir.mkdir(parents=True, exist_ok=True)
 
-    # 生成每个场景的视频
+    # 生成每个场景/片段的视频
     scene_videos = []
 
-    for idx, scene in enumerate(episode_scenes):
-        scene_id = scene['scene_id']
-        video_output = videos_dir / f"scene_{scene_id}.mp4"
+    # 默认时长：说书模式 4 秒，剧集动画模式 8 秒
+    default_duration = 4 if content_mode == 'narration' else 8
+
+    for idx, item in enumerate(episode_items):
+        item_id = item.get(id_field, item.get('scene_id', f'item_{idx}'))
+        video_output = videos_dir / f"scene_{item_id}.mp4"
 
         # 检查是否已完成
-        if scene_id in completed_scenes:
+        if item_id in completed_scenes:
             if video_output.exists():
-                print(f"  [{idx + 1}/{len(episode_scenes)}] 场景 {scene_id} ✓ 已完成")
+                print(f"  [{idx + 1}/{len(episode_items)}] {item_type} {item_id} ✓ 已完成")
                 scene_videos.append(video_output)
                 continue
             else:
                 # 标记为完成但文件不存在，需要重新生成
-                completed_scenes.remove(scene_id)
+                completed_scenes.remove(item_id)
 
-        print(f"  [{idx + 1}/{len(episode_scenes)}] 场景 {scene_id}")
+        print(f"  [{idx + 1}/{len(episode_items)}] {item_type} {item_id}")
 
         # 检查分镜图
-        storyboard_image = scene.get('generated_assets', {}).get('storyboard_image')
+        storyboard_image = item.get('generated_assets', {}).get('storyboard_image')
         if not storyboard_image:
-            print(f"    ⚠️  场景 {scene_id} 没有分镜图，跳过")
+            print(f"    ⚠️  {item_type} {item_id} 没有分镜图，跳过")
             continue
 
         storyboard_path = project_dir / storyboard_image
@@ -385,29 +332,31 @@ def generate_episode_video(
             print(f"    ⚠️  分镜图不存在: {storyboard_path}，跳过")
             continue
 
-        prompt = build_scene_prompt(scene, script.get('characters', {}))
-        duration = scene.get('duration_seconds', 8)
+        # 直接使用 video_prompt 字段
+        prompt = get_video_prompt(item)
+        duration = item.get('duration_seconds', default_duration)
+        duration_str = validate_duration(duration)
 
         try:
-            print(f"    🎥 生成视频（{duration}秒）...")
+            print(f"    🎥 生成视频（{duration_str}秒）...")
             client.generate_video(
                 prompt=prompt,
                 start_image=storyboard_path,
-                aspect_ratio="16:9",
-                duration_seconds=str(duration),
+                aspect_ratio=video_aspect_ratio,
+                duration_seconds=duration_str,
                 output_path=video_output
             )
 
             scene_videos.append(video_output)
 
             # 更新剧本中的 video_clip 字段
-            relative_path = f"videos/scene_{scene_id}.mp4"
+            relative_path = f"videos/scene_{item_id}.mp4"
             pm.update_scene_asset(
                 project_name, script_filename,
-                scene_id, 'video_clip', relative_path
+                item_id, 'video_clip', relative_path
             )
 
-            completed_scenes.append(scene_id)
+            completed_scenes.append(item_id)
 
             # 保存 checkpoint
             save_checkpoint(project_dir, episode, completed_scenes, started_at)
@@ -447,17 +396,15 @@ def generate_episode_video(
 def generate_scene_video(
     project_name: str,
     script_filename: str,
-    scene_id: str,
-    prompt: str = None
+    scene_id: str
 ) -> Path:
     """
-    生成单个场景的视频
+    生成单个场景/片段的视频
 
     Args:
         project_name: 项目名称
         script_filename: 剧本文件名
-        scene_id: 场景 ID
-        prompt: 视频生成 prompt（应由 Claude 根据场景动态生成）
+        scene_id: 场景/片段 ID
 
     Returns:
         生成的视频路径
@@ -465,45 +412,60 @@ def generate_scene_video(
     pm = ProjectManager()
     project_dir = pm.get_project_path(project_name)
 
-    # 加载剧本
+    # 加载剧本和项目配置
     script = pm.load_script(project_name, script_filename)
+    project_data = None
+    if pm.project_exists(project_name):
+        try:
+            project_data = pm.load_project(project_name)
+        except Exception:
+            pass
 
-    # 找到指定场景
-    scene = None
-    for s in script['scenes']:
-        if s['scene_id'] == scene_id:
-            scene = s
+    # 获取内容模式和画面比例
+    content_mode = script.get('content_mode', 'narration')
+    video_aspect_ratio = get_aspect_ratio(project_data, 'video')
+    all_items, id_field, _, _ = get_items_from_script(script)
+
+    # 找到指定场景/片段
+    item = None
+    for s in all_items:
+        if s.get(id_field) == scene_id or s.get('scene_id') == scene_id:
+            item = s
             break
 
-    if not scene:
-        raise ValueError(f"场景 '{scene_id}' 不存在")
+    if not item:
+        raise ValueError(f"场景/片段 '{scene_id}' 不存在")
 
     # 检查分镜图
-    storyboard_image = scene.get('generated_assets', {}).get('storyboard_image')
+    storyboard_image = item.get('generated_assets', {}).get('storyboard_image')
     if not storyboard_image:
-        raise ValueError(f"场景 '{scene_id}' 没有分镜图，请先运行 generate-storyboard")
+        raise ValueError(f"场景/片段 '{scene_id}' 没有分镜图，请先运行 generate-storyboard")
 
     storyboard_path = project_dir / storyboard_image
     if not storyboard_path.exists():
         raise FileNotFoundError(f"分镜图不存在: {storyboard_path}")
 
-    # 构建 prompt
-    if not prompt:
-        prompt = build_scene_prompt(scene, script.get('characters', {}))
+    # 直接使用 video_prompt 字段
+    prompt = get_video_prompt(item)
+
+    # 获取时长（说书模式默认 4 秒，剧集动画默认 8 秒）
+    default_duration = 4 if content_mode == 'narration' else 8
+    duration = item.get('duration_seconds', default_duration)
+    duration_str = validate_duration(duration)
 
     # 生成视频
     client = GeminiClient()
     output_path = project_dir / 'videos' / f"scene_{scene_id}.mp4"
 
-    print(f"🎬 正在生成视频: 场景 {scene_id}")
-    print(f"   动作: {scene.get('action', '')[:50]}...")
+    print(f"🎬 正在生成视频: 场景/片段 {scene_id}")
+    print(f"   画面比例: {video_aspect_ratio}")
     print(f"   预计等待时间: 1-6 分钟")
 
     client.generate_video(
         prompt=prompt,
         start_image=storyboard_path,
-        aspect_ratio="16:9",
-        duration_seconds=str(scene.get('duration_seconds', 8)),
+        aspect_ratio=video_aspect_ratio,
+        duration_seconds=duration_str,
         output_path=output_path
     )
 

@@ -4,6 +4,7 @@
 处理文件上传和静态资源服务
 """
 
+import json
 import os
 import urllib.parse
 from pathlib import Path
@@ -237,3 +238,156 @@ async def delete_source_file(project_name: str, filename: str):
         raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 草稿文件管理 ====================
+
+@router.get("/projects/{project_name}/drafts")
+async def list_drafts(project_name: str):
+    """列出项目的所有草稿目录和文件"""
+    try:
+        project_dir = pm.get_project_path(project_name)
+        drafts_dir = project_dir / "drafts"
+
+        result = {}
+        if drafts_dir.exists():
+            for episode_dir in sorted(drafts_dir.iterdir()):
+                if episode_dir.is_dir() and episode_dir.name.startswith("episode_"):
+                    episode_num = episode_dir.name.replace("episode_", "")
+                    files = []
+                    for f in sorted(episode_dir.glob("*.md")):
+                        files.append({
+                            "name": f.name,
+                            "step": _extract_step_number(f.name),
+                            "title": _get_step_title(f.name),
+                            "size": f.stat().st_size,
+                            "modified": f.stat().st_mtime
+                        })
+                    result[episode_num] = files
+
+        return {"drafts": result}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+
+
+def _extract_step_number(filename: str) -> int:
+    """从文件名提取步骤编号"""
+    import re
+    match = re.search(r'step(\d+)', filename)
+    return int(match.group(1)) if match else 0
+
+
+def _get_step_files(content_mode: str) -> dict:
+    """根据 content_mode 获取步骤文件名映射"""
+    if content_mode == "narration":
+        return {
+            1: "step1_segments.md",
+            2: "step2_grid_plan.md",
+            3: "step3_character_clue_tables.md"
+        }
+    else:
+        return {
+            1: "step1_normalized_script.md",
+            2: "step2_shot_budget.md",
+            3: "step3_character_clue_tables.md"
+        }
+
+
+def _get_step_title(filename: str) -> str:
+    """获取步骤标题"""
+    titles = {
+        # drama 模式
+        "step1_normalized_script.md": "规范化剧本",
+        "step2_shot_budget.md": "镜头预算表",
+        # narration 模式
+        "step1_segments.md": "片段拆分",
+        "step2_grid_plan.md": "宫格切分规划",
+        # 共用
+        "step3_character_clue_tables.md": "角色表/线索表"
+    }
+    return titles.get(filename, filename)
+
+
+def _get_content_mode(project_dir: Path) -> str:
+    """从 project.json 读取 content_mode"""
+    project_json_path = project_dir / "project.json"
+    if project_json_path.exists():
+        with open(project_json_path, "r", encoding="utf-8") as f:
+            project_data = json.load(f)
+            return project_data.get("content_mode", "drama")
+    return "drama"
+
+
+@router.get("/projects/{project_name}/drafts/{episode}/step{step_num}")
+async def get_draft_content(project_name: str, episode: int, step_num: int):
+    """获取特定步骤的草稿内容"""
+    try:
+        project_dir = pm.get_project_path(project_name)
+        content_mode = _get_content_mode(project_dir)
+        step_files = _get_step_files(content_mode)
+
+        if step_num not in step_files:
+            raise HTTPException(status_code=400, detail=f"无效的步骤编号: {step_num}")
+
+        draft_path = project_dir / "drafts" / f"episode_{episode}" / step_files[step_num]
+
+        if not draft_path.exists():
+            raise HTTPException(status_code=404, detail=f"草稿文件不存在")
+
+        content = draft_path.read_text(encoding="utf-8")
+        return PlainTextResponse(content)
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+
+
+@router.put("/projects/{project_name}/drafts/{episode}/step{step_num}")
+async def update_draft_content(
+    project_name: str,
+    episode: int,
+    step_num: int,
+    content: str = Body(..., media_type="text/plain")
+):
+    """更新草稿内容"""
+    try:
+        project_dir = pm.get_project_path(project_name)
+        content_mode = _get_content_mode(project_dir)
+        step_files = _get_step_files(content_mode)
+
+        if step_num not in step_files:
+            raise HTTPException(status_code=400, detail=f"无效的步骤编号: {step_num}")
+
+        drafts_dir = project_dir / "drafts" / f"episode_{episode}"
+        drafts_dir.mkdir(parents=True, exist_ok=True)
+
+        draft_path = drafts_dir / step_files[step_num]
+        draft_path.write_text(content, encoding="utf-8")
+
+        return {"success": True, "path": str(draft_path.relative_to(project_dir))}
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+
+
+@router.delete("/projects/{project_name}/drafts/{episode}/step{step_num}")
+async def delete_draft(project_name: str, episode: int, step_num: int):
+    """删除草稿文件"""
+    try:
+        project_dir = pm.get_project_path(project_name)
+        content_mode = _get_content_mode(project_dir)
+        step_files = _get_step_files(content_mode)
+
+        if step_num not in step_files:
+            raise HTTPException(status_code=400, detail=f"无效的步骤编号: {step_num}")
+
+        draft_path = project_dir / "drafts" / f"episode_{episode}" / step_files[step_num]
+
+        if draft_path.exists():
+            draft_path.unlink()
+            return {"success": True}
+        else:
+            raise HTTPException(status_code=404, detail="草稿文件不存在")
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+

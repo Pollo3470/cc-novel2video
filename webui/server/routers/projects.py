@@ -5,7 +5,7 @@
 """
 
 import shutil
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -23,11 +23,14 @@ class CreateProjectRequest(BaseModel):
     name: str
     title: str
     style: Optional[str] = ""
+    content_mode: Optional[str] = "narration"
 
 
 class UpdateProjectRequest(BaseModel):
     title: Optional[str] = None
     style: Optional[str] = None
+    content_mode: Optional[str] = None
+    aspect_ratio: Optional[dict] = None
 
 
 @router.get("/projects")
@@ -89,7 +92,7 @@ async def create_project(req: CreateProjectRequest):
         # 创建项目目录结构
         pm.create_project(req.name)
         # 创建项目元数据
-        project = pm.create_project_metadata(req.name, req.title, req.style)
+        project = pm.create_project_metadata(req.name, req.title, req.style, req.content_mode)
         return {"success": True, "project": project}
     except FileExistsError:
         raise HTTPException(status_code=400, detail=f"项目 '{req.name}' 已存在")
@@ -139,6 +142,10 @@ async def update_project(name: str, req: UpdateProjectRequest):
             project["title"] = req.title
         if req.style is not None:
             project["style"] = req.style
+        if req.content_mode is not None:
+            project["content_mode"] = req.content_mode
+        if req.aspect_ratio is not None:
+            project["aspect_ratio"] = req.aspect_ratio
 
         pm.save_project(name, project)
         return {"success": True, "project": project}
@@ -191,7 +198,7 @@ async def update_scene(name: str, scene_id: str, req: UpdateSceneRequest):
                 scene_found = True
                 # 更新允许的字段
                 for key, value in req.updates.items():
-                    if key in ["duration_seconds", "visual", "audio", "dialogue",
+                    if key in ["duration_seconds", "image_prompt", "video_prompt",
                                "characters_in_scene", "clues_in_scene", "segment_break"]:
                         scene[key] = value
                 break
@@ -203,5 +210,104 @@ async def update_scene(name: str, scene_id: str, req: UpdateSceneRequest):
         return {"success": True, "scene": scene}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"剧本不存在")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdateSegmentRequest(BaseModel):
+    script_file: str
+    duration_seconds: Optional[int] = None
+    segment_break: Optional[bool] = None
+    image_prompt: Optional[str] = None
+    video_prompt: Optional[str] = None
+    transition_to_next: Optional[str] = None
+
+
+class UpdateOverviewRequest(BaseModel):
+    synopsis: Optional[str] = None
+    genre: Optional[str] = None
+    theme: Optional[str] = None
+    world_setting: Optional[str] = None
+
+
+@router.patch("/projects/{name}/segments/{segment_id}")
+async def update_segment(name: str, segment_id: str, req: UpdateSegmentRequest):
+    """更新说书模式片段"""
+    try:
+        script = pm.load_script(name, req.script_file)
+
+        # 检查是否为说书模式
+        if script.get('content_mode') != 'narration' and 'segments' not in script:
+            raise HTTPException(status_code=400, detail="该剧本不是说书模式，请使用场景更新接口")
+
+        # 找到并更新片段
+        segment_found = False
+        for segment in script.get("segments", []):
+            if segment.get("segment_id") == segment_id:
+                segment_found = True
+                # 更新字段
+                if req.duration_seconds is not None:
+                    segment["duration_seconds"] = req.duration_seconds
+                if req.segment_break is not None:
+                    segment["segment_break"] = req.segment_break
+                if req.image_prompt is not None:
+                    segment["image_prompt"] = req.image_prompt
+                if req.video_prompt is not None:
+                    segment["video_prompt"] = req.video_prompt
+                if req.transition_to_next is not None:
+                    segment["transition_to_next"] = req.transition_to_next
+                break
+
+        if not segment_found:
+            raise HTTPException(status_code=404, detail=f"片段 '{segment_id}' 不存在")
+
+        pm.save_script(name, script, req.script_file)
+        return {"success": True, "segment": segment}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"剧本不存在")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 项目概述管理 ====================
+
+@router.post("/projects/{name}/generate-overview")
+async def generate_overview(name: str):
+    """使用 AI 生成项目概述"""
+    try:
+        overview = pm.generate_overview(name)
+        return {"success": True, "overview": overview}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{name}' 不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/projects/{name}/overview")
+async def update_overview(name: str, req: UpdateOverviewRequest):
+    """更新项目概述（手动编辑）"""
+    try:
+        project = pm.load_project(name)
+
+        # 确保 overview 字段存在
+        if "overview" not in project:
+            project["overview"] = {}
+
+        # 更新非空字段
+        if req.synopsis is not None:
+            project["overview"]["synopsis"] = req.synopsis
+        if req.genre is not None:
+            project["overview"]["genre"] = req.genre
+        if req.theme is not None:
+            project["overview"]["theme"] = req.theme
+        if req.world_setting is not None:
+            project["overview"]["world_setting"] = req.world_setting
+
+        pm.save_project(name, project)
+        return {"success": True, "overview": project["overview"]}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{name}' 不存在")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

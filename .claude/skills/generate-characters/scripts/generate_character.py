@@ -21,34 +21,23 @@ def build_character_prompt(name: str, description: str, style: str = "") -> str:
     """
     构建人物设计图生成 prompt
 
+    遵循 nano-banana 最佳实践：使用叙事性段落描述，而非关键词列表。
+
     Args:
         name: 人物名称
-        description: 人物描述
+        description: 人物描述（应为叙事性段落）
         style: 项目整体风格
 
     Returns:
         完整的 prompt 字符串
     """
-    style_text = f"\n- {style}" if style else ""
+    style_prefix = f"，{style}" if style else ""
 
-    prompt = f"""一张专业的漫画/动漫风格人物设计图。
+    prompt = f"""一张专业的人物设计参考图{style_prefix}。
 
-人物：{name}
-描述：{description}
+人物「{name}」的三视图设计稿。{description}
 
-图像展示人物的三个视角，垂直排列：
-1. 正面全身（面向镜头）
-2. 3/4 侧面（展示立体感）
-3. 侧面轮廓（展示剪影）
-
-风格要求：
-- 干净的纯色背景（浅灰或白色）
-- 三个视角比例一致
-- 清晰的面部特征和表情
-- 详细的服装和配饰
-- 专业概念设计品质
-
-注重让人物设计独特且令人印象深刻，适合视觉叙事。"""
+三个等比例全身像水平排列在纯净浅灰背景上：左侧正面、中间四分之三侧面、右侧纯侧面轮廓。柔和均匀的摄影棚照明，无强烈阴影。"""
 
     return prompt
 

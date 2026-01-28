@@ -201,6 +201,7 @@ function closeModal() {
 async function createProject() {
     const name = document.getElementById('project-name').value.trim();
     const title = document.getElementById('project-title').value.trim() || name;
+    const contentMode = document.getElementById('content-mode').value;
     const style = document.getElementById('project-style').value.trim();
 
     if (!name) {
@@ -215,7 +216,7 @@ async function createProject() {
         submitBtn.disabled = true;
         submitBtn.textContent = '创建中...';
 
-        await API.createProject(name, title, style);
+        await API.createProject(name, title, style, contentMode);
         closeModal();
         loadProjects();
 

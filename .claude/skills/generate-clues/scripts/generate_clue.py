@@ -20,66 +20,52 @@ from lib.gemini_client import GeminiClient
 from lib.project_manager import ProjectManager
 
 
-def build_prop_prompt(name: str, description: str) -> str:
+def build_prop_prompt(name: str, description: str, style: str = "") -> str:
     """
     构建道具类线索的 prompt
 
+    遵循 nano-banana 最佳实践：使用叙事性段落描述，而非关键词列表。
+
     Args:
         name: 线索名称
-        description: 线索描述
+        description: 线索描述（应为叙事性段落）
+        style: 项目整体风格（可选）
 
     Returns:
         完整的 prompt 字符串
     """
-    prompt = f"""一张专业的概念设计参考图，展示一个重要道具。
+    style_prefix = f"，{style}" if style else ""
 
-道具名称：{name}
-道具描述：{description}
+    prompt = f"""一张专业的道具设计参考图{style_prefix}。
 
-图像布局（16:9 横屏）：
-- 左侧：道具正面全视图，干净背景
-- 中间：道具 45 度侧视图，展示立体感
-- 右侧：关键细节特写（纹理、标记、特殊部位）
+道具「{name}」的多视角展示。{description}
 
-风格要求：
-- 干净的纯色背景（浅灰或白色）
-- 高清细节，适合作为视觉参考
-- 光线均匀，无强烈阴影
-- 专业概念设计品质
-- 色彩准确，符合描述
-
-重点突出道具的独特特征，使其在不同场景中易于识别。"""
+三个视图水平排列在纯净浅灰背景上：左侧正面全视图、中间45度侧视图展示立体感、右侧关键细节特写。柔和均匀的摄影棚照明，高清质感，色彩准确。"""
 
     return prompt
 
 
-def build_location_prompt(name: str, description: str) -> str:
+def build_location_prompt(name: str, description: str, style: str = "") -> str:
     """
     构建环境类线索的 prompt
 
+    遵循 nano-banana 最佳实践：使用叙事性段落描述，而非关键词列表。
+
     Args:
         name: 线索名称
-        description: 线索描述
+        description: 线索描述（应为叙事性段落）
+        style: 项目整体风格（可选）
 
     Returns:
         完整的 prompt 字符串
     """
-    prompt = f"""一张专业的场景设计参考图，展示一个标志性环境元素。
+    style_prefix = f"，{style}" if style else ""
 
-环境名称：{name}
-环境描述：{description}
+    prompt = f"""一张专业的场景设计参考图{style_prefix}。
 
-图像布局（16:9 横屏）：
-- 主画面（占 3/4）：环境整体视图，展示完整外观和氛围
-- 右下角小图（占 1/4）：标志性特征细节特写
+标志性场景「{name}」的视觉参考。{description}
 
-风格要求：
-- 光线柔和自然
-- 氛围与描述一致
-- 突出标志性特征（便于在不同场景中识别）
-- 专业概念设计品质
-
-重点突出环境的独特视觉特征，使其在不同时间和天气条件下仍可识别。"""
+主画面占据四分之三区域展示环境整体外观与氛围，右下角小图为细节特写。柔和自然光线。"""
 
     return prompt
 
@@ -101,6 +87,10 @@ def generate_clue(
     pm = ProjectManager()
     project_dir = pm.get_project_path(project_name)
 
+    # 获取项目信息和风格
+    project = pm.load_project(project_name)
+    style = project.get('style', '')
+
     # 获取线索信息
     clue = pm.get_clue(project_name, clue_name)
     clue_type = clue.get('type', 'prop')
@@ -111,9 +101,9 @@ def generate_clue(
 
     # 根据类型选择 prompt 模板
     if clue_type == 'location':
-        prompt = build_location_prompt(clue_name, description)
+        prompt = build_location_prompt(clue_name, description, style)
     else:
-        prompt = build_prop_prompt(clue_name, description)
+        prompt = build_prop_prompt(clue_name, description, style)
 
     # 生成图片
     client = GeminiClient()

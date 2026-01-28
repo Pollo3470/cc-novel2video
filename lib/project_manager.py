@@ -1,7 +1,7 @@
 """
 项目文件管理器
 
-管理漫剧项目的目录结构、分镜剧本读写、状态追踪。
+管理视频项目的目录结构、分镜剧本读写、状态追踪。
 """
 
 import json
@@ -10,12 +10,24 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 
+from pydantic import BaseModel, Field
+
+
+# ==================== 数据模型 ====================
+
+class ProjectOverview(BaseModel):
+    """项目概述数据模型，用于 Gemini Structured Outputs"""
+    synopsis: str = Field(description="故事梗概，200-300字，概括主线剧情")
+    genre: str = Field(description="题材类型，如：古装宫斗、现代悬疑、玄幻修仙")
+    theme: str = Field(description="核心主题，如：复仇与救赎、成长与蜕变")
+    world_setting: str = Field(description="时代背景和世界观设定，100-200字")
+
 
 class ProjectManager:
-    """漫剧项目管理器"""
+    """视频项目管理器"""
 
     # 项目子目录结构
-    SUBDIRS = ['source', 'scripts', 'characters', 'clues', 'storyboards', 'videos', 'output']
+    SUBDIRS = ['source', 'scripts', 'drafts', 'characters', 'clues', 'storyboards', 'videos', 'output']
 
     # 项目元数据文件名
     PROJECT_FILE = 'project.json'
@@ -156,7 +168,8 @@ class ProjectManager:
                 "chapter": chapter,
                 "source_file": source_file
             },
-            "characters": {},
+            "characters_in_episode": [],
+            "clues_in_episode": [],
             "scenes": [],
             "metadata": {
                 "created_at": datetime.now().isoformat(),
@@ -293,20 +306,28 @@ class ProjectManager:
     # ==================== 数据结构标准化 ====================
 
     @staticmethod
-    def create_generated_assets() -> Dict:
+    def create_generated_assets(content_mode: str = 'narration') -> Dict:
         """
         创建标准的 generated_assets 结构
+
+        Args:
+            content_mode: 内容模式（'narration' 或 'drama'）
 
         Returns:
             标准的 generated_assets 字典
         """
-        return {
-            'storyboard_grid': None,
+        assets = {
             'storyboard_image': None,
             'video_clip': None,
             'video_uri': None,
             'status': 'pending'
         }
+
+        # 仅 drama 模式包含 storyboard_grid
+        if content_mode == 'drama':
+            assets['storyboard_grid'] = None
+
+        return assets
 
     @staticmethod
     def create_scene_template(
@@ -420,18 +441,19 @@ class ProjectManager:
 
         return scene
 
-    def update_scene_status(self, scene: Dict) -> str:
+    def update_scene_status(self, scene: Dict, content_mode: str = 'narration') -> str:
         """
         根据 generated_assets 内容更新并返回场景状态
 
         状态值:
         - pending: 未开始
-        - in_progress: 处理中
+        - in_progress: 处理中（仅 drama 模式）
         - storyboard_ready: 分镜图完成
         - completed: 视频完成
 
         Args:
             scene: 场景字典
+            content_mode: 内容模式（'narration' 或 'drama'）
 
         Returns:
             更新后的状态值
@@ -446,7 +468,8 @@ class ProjectManager:
             status = 'completed'
         elif has_image:
             status = 'storyboard_ready'
-        elif has_grid:
+        elif content_mode == 'drama' and has_grid:
+            # 仅 drama 模式下 grid 表示 in_progress
             status = 'in_progress'
         else:
             status = 'pending'
@@ -504,8 +527,25 @@ class ProjectManager:
                 'source_file': ''
             }
 
-        if 'characters' not in script:
-            script['characters'] = {}
+        # 处理旧格式：如果有 characters 对象，同步到 project.json
+        if 'characters' in script and isinstance(script['characters'], dict) and script['characters']:
+            print("⚠️  检测到旧格式 characters 对象，自动同步到 project.json...")
+            self.sync_characters_from_script(project_name, script_filename)
+            # sync_characters_from_script 会重新加载和保存 script，所以需要重新加载
+            script = self.load_script(project_name, script_filename)
+
+        # 处理旧格式：如果有 clues 对象，同步到 project.json
+        if 'clues' in script and isinstance(script['clues'], dict) and script['clues']:
+            print("⚠️  检测到旧格式 clues 对象，自动同步到 project.json...")
+            self.sync_clues_from_script(project_name, script_filename)
+            script = self.load_script(project_name, script_filename)
+
+        # 确保新格式字段存在
+        if 'characters_in_episode' not in script:
+            script['characters_in_episode'] = []
+
+        if 'clues_in_episode' not in script:
+            script['clues_in_episode'] = []
 
         if 'scenes' not in script:
             script['scenes'] = []
@@ -588,7 +628,7 @@ class ProjectManager:
         Args:
             project_name: 项目名称
             script_filename: 剧本文件名
-            scene_id: 场景 ID
+            scene_id: 场景/片段 ID
             asset_type: 资源类型 ('storyboard_grid', 'storyboard_image' 或 'video_clip')
             asset_path: 资源路径
 
@@ -597,16 +637,21 @@ class ProjectManager:
         """
         script = self.load_script(project_name, script_filename)
 
-        for scene in script['scenes']:
-            if scene['scene_id'] == scene_id:
-                scene['generated_assets'][asset_type] = asset_path
+        # 根据内容模式选择正确的数据结构
+        content_mode = script.get('content_mode', 'narration')
+        if content_mode == 'narration' and 'segments' in script:
+            items = script['segments']
+            id_field = 'segment_id'
+        else:
+            items = script.get('scenes', [])
+            id_field = 'scene_id'
 
-                # 更新状态
-                assets = scene['generated_assets']
-                if assets.get('storyboard_image') and assets.get('video_clip'):
-                    assets['status'] = 'completed'
-                elif assets.get('storyboard_image') or assets.get('video_clip') or assets.get('storyboard_grid'):
-                    assets['status'] = 'in_progress'
+        for item in items:
+            if item[id_field] == scene_id:
+                item['generated_assets'][asset_type] = asset_path
+
+                # 使用 update_scene_status 更新状态
+                self.update_scene_status(item, content_mode)
 
                 self.save_script(project_name, script, script_filename)
                 return script
@@ -620,7 +665,7 @@ class ProjectManager:
         asset_type: str
     ) -> List[Dict]:
         """
-        获取待处理的场景列表
+        获取待处理的场景/片段列表
 
         Args:
             project_name: 项目名称
@@ -628,13 +673,20 @@ class ProjectManager:
             asset_type: 资源类型
 
         Returns:
-            待处理场景列表
+            待处理场景/片段列表
         """
         script = self.load_script(project_name, script_filename)
 
+        # 根据内容模式选择正确的数据结构
+        content_mode = script.get('content_mode', 'narration')
+        if content_mode == 'narration' and 'segments' in script:
+            items = script['segments']
+        else:
+            items = script.get('scenes', [])
+
         return [
-            scene for scene in script['scenes']
-            if not scene['generated_assets'].get(asset_type)
+            item for item in items
+            if not item['generated_assets'].get(asset_type)
         ]
 
     # ==================== 文件路径工具 ====================
@@ -665,22 +717,37 @@ class ProjectManager:
         script_filename: str
     ) -> List[Dict]:
         """
-        获取有多宫格图但无单独场景图的场景列表
+        获取需要生成分镜图的场景/片段列表
+
+        - narration 模式：返回所有没有 storyboard_image 的片段
+        - drama 模式：返回有 storyboard_grid 但无 storyboard_image 的场景
 
         Args:
             project_name: 项目名称
             script_filename: 剧本文件名
 
         Returns:
-            需要生成单独场景图的场景列表
+            需要生成分镜图的场景/片段列表
         """
         script = self.load_script(project_name, script_filename)
 
-        return [
-            scene for scene in script['scenes']
-            if scene['generated_assets'].get('storyboard_grid')
-            and not scene['generated_assets'].get('storyboard_image')
-        ]
+        # 根据内容模式选择正确的数据结构
+        content_mode = script.get('content_mode', 'narration')
+        if content_mode == 'narration' and 'segments' in script:
+            items = script['segments']
+            # narration 模式：直接检查是否缺少 storyboard_image
+            return [
+                item for item in items
+                if not item.get('generated_assets', {}).get('storyboard_image')
+            ]
+        else:
+            items = script.get('scenes', [])
+            # drama 模式：需要先有 grid，再生成 image
+            return [
+                item for item in items
+                if item.get('generated_assets', {}).get('storyboard_grid')
+                and not item.get('generated_assets', {}).get('storyboard_image')
+            ]
 
     # ==================== 项目级元数据管理 ====================
 
@@ -726,8 +793,15 @@ class ProjectManager:
         """
         project_file = self._get_project_file_path(project_name)
 
-        # 更新时间戳
-        project['metadata']['updated_at'] = datetime.now().isoformat()
+        # 确保 metadata 字段存在
+        if 'metadata' not in project:
+            project['metadata'] = {
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+        else:
+            # 更新时间戳
+            project['metadata']['updated_at'] = datetime.now().isoformat()
 
         with open(project_file, 'w', encoding='utf-8') as f:
             json.dump(project, f, ensure_ascii=False, indent=2)
@@ -738,7 +812,8 @@ class ProjectManager:
         self,
         project_name: str,
         title: str,
-        style: Optional[str] = None
+        style: Optional[str] = None,
+        content_mode: str = "narration"
     ) -> Dict:
         """
         创建新的项目元数据文件
@@ -747,12 +822,14 @@ class ProjectManager:
             project_name: 项目名称
             title: 项目标题
             style: 整体视觉风格描述
+            content_mode: 内容模式 ('narration' 或 'drama')
 
         Returns:
             项目元数据字典
         """
         project = {
             "title": title,
+            "content_mode": content_mode,
             "style": style or "",
             "episodes": [],
             "characters": {},
@@ -1075,6 +1152,168 @@ class ProjectManager:
         """获取线索设计图路径"""
         return self.get_project_path(project_name) / 'clues' / filename
 
+    # ==================== 角色/线索直接写入工具 ====================
+
+    def add_character(
+        self,
+        project_name: str,
+        name: str,
+        description: str,
+        voice_style: str = ""
+    ) -> bool:
+        """
+        直接添加角色到 project.json
+
+        如果角色已存在，跳过不覆盖。
+
+        Args:
+            project_name: 项目名称
+            name: 角色名称
+            description: 角色描述
+            voice_style: 声音风格（可选）
+
+        Returns:
+            True 如果新增成功，False 如果已存在
+        """
+        project = self.load_project(project_name)
+
+        if name in project.get('characters', {}):
+            print(f"ℹ️  角色 '{name}' 已存在于 project.json，跳过")
+            return False
+
+        if 'characters' not in project:
+            project['characters'] = {}
+
+        project['characters'][name] = {
+            'description': description,
+            'character_sheet': '',
+            'voice_style': voice_style
+        }
+
+        self.save_project(project_name, project)
+        print(f"✅ 添加角色: {name}")
+        return True
+
+    def add_clue(
+        self,
+        project_name: str,
+        name: str,
+        clue_type: str,
+        description: str,
+        importance: str = "minor"
+    ) -> bool:
+        """
+        直接添加线索到 project.json
+
+        如果线索已存在，跳过不覆盖。
+
+        Args:
+            project_name: 项目名称
+            name: 线索名称
+            clue_type: 线索类型（prop 或 location）
+            description: 线索描述
+            importance: 重要性（major 或 minor，默认 minor）
+
+        Returns:
+            True 如果新增成功，False 如果已存在
+        """
+        project = self.load_project(project_name)
+
+        if name in project.get('clues', {}):
+            print(f"ℹ️  线索 '{name}' 已存在于 project.json，跳过")
+            return False
+
+        if 'clues' not in project:
+            project['clues'] = {}
+
+        project['clues'][name] = {
+            'type': clue_type,
+            'description': description,
+            'importance': importance,
+            'clue_sheet': ''
+        }
+
+        self.save_project(project_name, project)
+        print(f"✅ 添加线索: {name}")
+        return True
+
+    def add_characters_batch(
+        self,
+        project_name: str,
+        characters: Dict[str, Dict]
+    ) -> int:
+        """
+        批量添加角色到 project.json
+
+        Args:
+            project_name: 项目名称
+            characters: 角色字典 {name: {description, voice_style}}
+
+        Returns:
+            新增的角色数量
+        """
+        project = self.load_project(project_name)
+
+        if 'characters' not in project:
+            project['characters'] = {}
+
+        added = 0
+        for name, data in characters.items():
+            if name not in project['characters']:
+                project['characters'][name] = {
+                    'description': data.get('description', ''),
+                    'character_sheet': data.get('character_sheet', ''),
+                    'voice_style': data.get('voice_style', '')
+                }
+                added += 1
+                print(f"✅ 添加角色: {name}")
+            else:
+                print(f"ℹ️  角色 '{name}' 已存在，跳过")
+
+        if added > 0:
+            self.save_project(project_name, project)
+
+        return added
+
+    def add_clues_batch(
+        self,
+        project_name: str,
+        clues: Dict[str, Dict]
+    ) -> int:
+        """
+        批量添加线索到 project.json
+
+        Args:
+            project_name: 项目名称
+            clues: 线索字典 {name: {type, description, importance}}
+
+        Returns:
+            新增的线索数量
+        """
+        project = self.load_project(project_name)
+
+        if 'clues' not in project:
+            project['clues'] = {}
+
+        added = 0
+        for name, data in clues.items():
+            if name not in project['clues']:
+                project['clues'][name] = {
+                    'type': data.get('type', 'prop'),
+                    'description': data.get('description', ''),
+                    'importance': data.get('importance', 'minor'),
+                    'clue_sheet': data.get('clue_sheet', '')
+                }
+                added += 1
+                print(f"✅ 添加线索: {name}")
+            else:
+                print(f"ℹ️  线索 '{name}' 已存在，跳过")
+
+        if added > 0:
+            self.save_project(project_name, project)
+
+        return added
+
     # ==================== 参考图收集工具 ====================
 
     def collect_reference_images(
@@ -1115,3 +1354,98 @@ class ProjectManager:
                     refs.append(sheet_path)
 
         return refs
+
+    # ==================== 项目概述生成 ====================
+
+    def _read_source_files(self, project_name: str, max_chars: int = 50000) -> str:
+        """
+        读取项目 source 目录下的所有文本文件内容
+
+        Args:
+            project_name: 项目名称
+            max_chars: 最大读取字符数（避免超出 API 限制）
+
+        Returns:
+            合并后的文本内容
+        """
+        project_dir = self.get_project_path(project_name)
+        source_dir = project_dir / 'source'
+
+        if not source_dir.exists():
+            return ""
+
+        contents = []
+        total_chars = 0
+
+        # 按文件名排序，确保顺序一致
+        for file_path in sorted(source_dir.glob('*')):
+            if file_path.is_file() and file_path.suffix.lower() in ['.txt', '.md']:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        remaining = max_chars - total_chars
+                        if remaining <= 0:
+                            break
+                        if len(content) > remaining:
+                            content = content[:remaining]
+                        contents.append(f"--- {file_path.name} ---\n{content}")
+                        total_chars += len(content)
+                except Exception as e:
+                    print(f"⚠️  读取文件失败 {file_path.name}: {e}")
+
+        return "\n\n".join(contents)
+
+    def generate_overview(self, project_name: str) -> Dict:
+        """
+        使用 Gemini API 生成项目概述
+
+        Args:
+            project_name: 项目名称
+
+        Returns:
+            生成的 overview 字典，包含 synopsis, genre, theme, world_setting, generated_at
+        """
+        from google import genai
+
+        # 读取源文件内容
+        source_content = self._read_source_files(project_name)
+        if not source_content:
+            raise ValueError("source 目录为空，无法生成概述")
+
+        # 初始化 Gemini 客户端
+        backend = os.environ.get('GEMINI_BACKEND', 'aistudio').lower()
+        if backend == 'vertex':
+            api_key = os.environ.get('VERTEX_API_KEY')
+            if not api_key:
+                raise ValueError("VERTEX_API_KEY 环境变量未设置")
+            client = genai.Client(vertexai=True, api_key=api_key)
+        else:
+            api_key = os.environ.get('GEMINI_API_KEY')
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY 环境变量未设置")
+            client = genai.Client(api_key=api_key)
+
+        # 调用 Gemini API（Structured Outputs）
+        prompt = f"请分析以下小说内容，提取关键信息：\n\n{source_content}"
+
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_json_schema": ProjectOverview.model_json_schema(),
+            },
+        )
+
+        # 解析并验证响应
+        overview = ProjectOverview.model_validate_json(response.text)
+        overview_dict = overview.model_dump()
+        overview_dict["generated_at"] = datetime.now().isoformat()
+
+        # 保存到 project.json
+        project = self.load_project(project_name)
+        project["overview"] = overview_dict
+        self.save_project(project_name, project)
+
+        print("✅ 项目概述已生成并保存")
+        return overview_dict

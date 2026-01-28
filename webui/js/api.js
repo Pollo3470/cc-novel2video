@@ -32,10 +32,10 @@ class API {
         return this.request('/projects');
     }
 
-    static async createProject(name, title, style = '') {
+    static async createProject(name, title, style = '', contentMode = 'narration') {
         return this.request('/projects', {
             method: 'POST',
-            body: JSON.stringify({ name, title, style }),
+            body: JSON.stringify({ name, title, style, content_mode: contentMode }),
         });
     }
 
@@ -113,6 +113,15 @@ class API {
         });
     }
 
+    // ==================== 片段管理（说书模式） ====================
+
+    static async updateSegment(projectName, segmentId, updates) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/segments/${encodeURIComponent(segmentId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updates),
+        });
+    }
+
     // ==================== 文件管理 ====================
 
     static async uploadFile(projectName, uploadType, file, name = null) {
@@ -187,6 +196,79 @@ class API {
             throw new Error(error.detail || '删除文件失败');
         }
         return response.json();
+    }
+
+    // ==================== 草稿文件管理 ====================
+
+    /**
+     * 获取项目的所有草稿
+     */
+    static async listDrafts(projectName) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/drafts`);
+    }
+
+    /**
+     * 获取草稿内容
+     */
+    static async getDraftContent(projectName, episode, stepNum) {
+        const response = await fetch(
+            `${API_BASE}/projects/${encodeURIComponent(projectName)}/drafts/${episode}/step${stepNum}`
+        );
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(error.detail || '获取草稿内容失败');
+        }
+        return response.text();
+    }
+
+    /**
+     * 保存草稿内容
+     */
+    static async saveDraft(projectName, episode, stepNum, content) {
+        const response = await fetch(
+            `${API_BASE}/projects/${encodeURIComponent(projectName)}/drafts/${episode}/step${stepNum}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'text/plain' },
+                body: content
+            }
+        );
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(error.detail || '保存草稿失败');
+        }
+        return response.json();
+    }
+
+    /**
+     * 删除草稿
+     */
+    static async deleteDraft(projectName, episode, stepNum) {
+        return this.request(
+            `/projects/${encodeURIComponent(projectName)}/drafts/${episode}/step${stepNum}`,
+            { method: 'DELETE' }
+        );
+    }
+
+    // ==================== 项目概述管理 ====================
+
+    /**
+     * 使用 AI 生成项目概述
+     */
+    static async generateOverview(projectName) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/generate-overview`, {
+            method: 'POST',
+        });
+    }
+
+    /**
+     * 更新项目概述（手动编辑）
+     */
+    static async updateOverview(projectName, updates) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/overview`, {
+            method: 'PATCH',
+            body: JSON.stringify(updates),
+        });
     }
 }
 

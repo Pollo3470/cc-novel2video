@@ -1,6 +1,6 @@
-# AI 漫剧生成工作空间
+# AI 视频生成工作空间
 
-你是一个专业的 AI 漫剧内容创作助手，帮助用户将小说转化为可发布的短视频内容。
+你是一个专业的 AI 视频内容创作助手，帮助用户将小说转化为可发布的短视频内容。
 
 ---
 
@@ -15,14 +15,20 @@
 - **Prompt 使用中文**：调用 Gemini/Veo API 的 prompt 应使用中文编写
 
 ### 视频规格
-- **视频比例**：16:9 横屏格式
-- **单场景时长**：默认 8 秒
+- **视频比例**：通过 API 参数设置（不包含在 prompt 中）
+  - 说书+画面模式（默认）：**9:16 竖屏**
+  - 剧集动画模式：16:9 横屏
+- **单片段/场景时长**：
+  - 说书+画面模式：默认 **4 秒**（可选 6s/8s）
+  - 剧集动画模式：默认 8 秒
 - **分辨率**：720p
-- **分镜图格式**：两步流程（多宫格预览图 + 单独场景图）
-- **生成方式**：每个场景独立生成，使用分镜图作为起始帧
+- **分镜图格式**：
+  - 说书+画面模式：直接生成（无多宫格，9:16 竖屏）
+  - 剧集动画模式：两步流程（多宫格预览图 16:9 + 单独场景图 16:9）
+- **生成方式**：每个片段/场景独立生成，使用分镜图作为起始帧
 
-> ⚠️ **关于 extend 功能**：Veo 3.1 extend 功能仅用于延长单个场景（当需要超过 8 秒时），
-> 不适合用于串联不同镜头。不同场景之间使用 ffmpeg 拼接。
+> ⚠️ **关于 extend 功能**：Veo 3.1 extend 功能仅用于延长单个片段/场景，
+> 每次固定 +7 秒，不适合用于串联不同镜头。不同片段/场景之间使用 ffmpeg 拼接。
 
 ### 音频规范
 - **BGM 自动禁止**：通过 `negative_prompt` API 参数自动排除背景音乐
@@ -34,9 +40,40 @@
 
 ---
 
+## 内容模式
+
+系统支持两种内容模式，通过 `project.json` 中的 `content_mode` 字段切换：
+
+| 维度 | 说书+画面模式（默认） | 剧集动画模式 |
+|------|----------------------|-------------|
+| content_mode | `narration` | `drama` |
+| 内容形式 | 保留小说原文，不改编 | 小说改编为剧本 |
+| 数据结构 | `segments` 数组 | `scenes` 数组 |
+| 默认时长 | 4 秒/片段 | 8 秒/场景 |
+| 对白来源 | 后期人工配音（小说原文） | 演员对话 |
+| 视频 Prompt | 仅包含角色对话（如有），无旁白 | 包含对话、旁白、音效 |
+| 画面比例 | 9:16 竖屏（分镜图+视频） | 16:9 横屏 |
+| 使用 Agent | `novel-to-narration-script` | `novel-to-storyboard-script` |
+
+### 说书+画面模式（默认）
+
+- **保留原文**：不改编、不删减、不添加小说原文内容
+- **片段拆分**：按朗读节奏拆分为约 4 秒的片段
+- **视觉设计**：为每个片段设计画面（9:16 竖屏）
+- **人工配音**：原文旁白由后期人工配音，不写入视频 Prompt
+- **对话保留**：仅当原文有角色对话时，将对话写入视频 Prompt
+
+### 剧集动画模式
+
+- **剧本改编**：将小说改编为剧本形式
+- **场景设计**：每个场景默认 8 秒（16:9 横屏）
+- **完整音频**：视频包含对话、旁白、音效
+
+---
+
 ## 项目结构
 
-- `projects/` - 所有漫剧项目的工作空间
+- `projects/` - 所有视频项目的工作空间
 - `lib/` - 共享 Python 库（Gemini API 封装、项目管理）
 - `.claude/skills/` - 可用的 skills
 
@@ -44,7 +81,6 @@
 
 | Skill | 触发命令 | 功能 |
 |-------|---------|------|
-| novel-to-script | `/novel-to-script` | 小说→分镜剧本 |
 | generate-characters | `/generate-characters` | 生成人物设计图 |
 | generate-clues | `/generate-clues` | 生成线索设计图（重要物品/环境） |
 | generate-storyboard | `/generate-storyboard` | 生成分镜图片 |
@@ -54,27 +90,47 @@
 
 ## 快速开始
 
-新用户请使用 `/manga-workflow` 开始完整的漫剧创作流程。
+新用户请使用 `/manga-workflow` 开始完整的视频创作流程。
 
-## 工作流程
+## 工作流程（说书+画面模式）
 
 1. **准备小说**：将小说文本放入 `projects/{项目名}/source/`
-2. **生成剧本**：`/novel-to-script` 将小说转为分镜剧本
-3. **确认线索**：识别需要固化的重要物品和环境元素
-4. **人物设计**：`/generate-characters` 生成人物设计图
-5. **线索设计**：`/generate-clues` 生成线索设计图
-6. **分镜图片**：`/generate-storyboard` 生成分镜图（两步流程）
-   - 第一步：生成多宫格预览图（审核人物/线索一致性和整体构图）
-   - 第二步：以多宫格图为参考，生成单独场景图（用于视频起始帧）
-   - 支持只生成多宫格图（`--grids`）或只生成单独场景图（`--scenes`）
-7. **视频生成**：`/generate-video --episode N` 生成视频
-   - 每个场景独立生成，使用分镜图作为起始帧
+2. **项目概述**：上传源文件后系统自动生成项目概述（synopsis、genre、theme、world_setting），供后续 Agent 参考
+3. **创建项目**：设置 `content_mode: "narration"`（默认）和 `style`
+4. **生成剧本**：系统调用 `novel-to-narration-script` agent 执行三步流程：
+   - Step 1: 拆分片段（按朗读节奏，默认 4 秒/片段，含 segment_break 标记）
+   - Step 2: 角色表/线索表（生成参考表并写入 project.json）
+   - Step 3: 生成 JSON（使用 segments 结构）
+5. **人物设计**：`/generate-characters` 生成人物设计图（16:9 横屏）
+6. **线索设计**：`/generate-clues` 生成线索设计图（16:9 横屏）
+7. **分镜图片**：`/generate-storyboard` 直接生成分镜图
+   - 直接生成单独场景图（**9:16 竖屏**）
+   - 使用 character_sheet 和 clue_sheet 作为参考图保持一致性
+   - 无需多宫格预览图步骤
+8. **视频生成**：`/generate-video --episode N` 生成视频
+   - **9:16 竖屏**格式
+   - 每个片段独立生成，使用分镜图作为起始帧
    - 自动使用 ffmpeg 拼接成完整视频
-   - `segment_break` 标记处可添加转场效果
+   - 视频 Prompt 仅包含角色对话（如有），不包含旁白
    - 支持断点续传
-8. **后期处理**（可选）：`/compose-video` 添加 BGM、片头片尾
+9. **后期配音**：人工录制小说原文旁白
+10. **后期合成**：`/compose-video` 合并视频、旁白、BGM
 
 每个步骤都有审核点，可以在确认后再继续下一步。
+
+## 工作流程（剧集动画模式）
+
+如需使用剧集动画模式，在 `project.json` 中设置 `content_mode: "drama"`：
+
+1. **准备小说**：将小说文本放入 `projects/{项目名}/source/`
+2. **项目概述**：上传源文件后系统自动生成项目概述（synopsis、genre、theme、world_setting），供后续 Agent 参考
+3. **生成剧本**：系统调用 `novel-to-storyboard-script` agent 将小说转为分镜剧本
+4. **确认线索**：识别需要固化的重要物品和环境元素
+5. **人物设计**：`/generate-characters` 生成人物设计图
+6. **线索设计**：`/generate-clues` 生成线索设计图
+7. **分镜图片**：`/generate-storyboard` 生成分镜图（两步流程，16:9 横屏）
+8. **视频生成**：`/generate-video --episode N` 生成视频（16:9 横屏）
+9. **后期处理**（可选）：`/compose-video` 添加 BGM、片头片尾
 
 ## 视频生成模式
 
@@ -111,23 +167,40 @@ python .claude/skills/generate-video/scripts/generate_video.py \
 
 ```json
 {
-  "scene_id": "E1S5",
+  "segment_id": "E1S05",
   "segment_break": true,
-  "visual": { ... }
+  "image_prompt": "...",
+  "video_prompt": "..."
 }
 ```
+
+### 剧本核心字段
+
+每个片段/场景包含以下核心字段：
+
+| 字段 | 说明 |
+|------|------|
+| `segment_id` / `scene_id` | 唯一标识 |
+| `novel_text` | 小说原文（仅说书模式，用于后期配音） |
+| `image_prompt` | 分镜图生成 Prompt（直接用于 Gemini API） |
+| `video_prompt` | 视频生成 Prompt（直接用于 Veo API） |
+| `characters_in_segment/scene` | 出场人物列表 |
+| `clues_in_segment/scene` | 重要线索列表 |
+| `duration_seconds` | 时长（4/6/8 秒） |
+| `transition_to_next` | 转场类型 |
 
 ## Veo 3.1 技术参考
 
 | 功能 | 说明 |
 |------|------|
 | 图生视频 | 使用分镜图作为起始帧 |
-| 单场景时长 | 默认 8 秒 |
-| extend 功能 | 仅用于延长单个场景，每次 +7 秒，最多延长至 148 秒 |
+| 单片段/场景时长 | 说书模式默认 4 秒，剧集动画模式默认 8 秒 |
+| 时长选项 | 仅支持 4s / 6s / 8s |
+| extend 功能 | 仅用于延长单个片段/场景，每次固定 +7 秒，最多延长至 148 秒 |
 | 分辨率 | 720p |
-| 宽高比 | 16:9 横屏 |
+| 宽高比 | 说书模式 9:16 竖屏，剧集动画模式 16:9 横屏（通过 API 参数设置） |
 
-> 注意：extend 功能设计用于延长同一个场景的动作，不适合用于串联不同镜头。
+> 注意：extend 功能设计用于延长同一个片段/场景的动作，不适合用于串联不同镜头。
 
 ## 关键原则
 
@@ -188,7 +261,7 @@ STORYBOARD_MAX_WORKERS=3
 
 ## 项目目录结构
 
-每个漫剧项目存放在 `projects/{项目名}/` 下：
+每个视频项目存放在 `projects/{项目名}/` 下：
 
 ```
 projects/{项目名}/
@@ -198,10 +271,9 @@ projects/{项目名}/
 ├── characters/   # 人物设计图
 ├── clues/        # 线索设计图（重要物品/环境）
 ├── storyboards/  # 分镜图片
-│   ├── grid_001.png      # 多宫格预览图（批次 1）
-│   ├── grid_002.png      # 多宫格预览图（批次 2）
-│   ├── scene_E1S01.png   # 单独场景图
+│   ├── scene_E1S01.png   # 分镜图（说书模式：9:16，剧集模式：16:9）
 │   ├── scene_E1S02.png
+│   ├── grid_001.png      # [仅剧集动画模式] 多宫格预览图
 │   └── ...
 ├── videos/       # 视频分镜（含 checkpoint 文件）
 └── output/       # 最终输出
@@ -211,11 +283,78 @@ projects/{项目名}/
 
 项目级元数据文件包含：
 - `title`：项目标题
-- `style`：整体视觉风格描述
+- `content_mode`：内容模式（`narration` 默认 或 `drama`）
+- `style`：整体视觉风格描述（不限于动漫，根据项目需要设定）
+- `overview`：**项目概述**（上传源文件后自动生成，包含故事梗概、题材类型、核心主题、世界观设定）
+- `aspect_ratio`：可选，自定义各资源的画面比例
 - `episodes`：剧集列表及状态
-- `characters`：人物定义和设计图路径
-- `clues`：线索定义和设计图路径
+- `characters`：**人物完整定义**和设计图路径
+- `clues`：**线索完整定义**和设计图路径
 - `status`：项目当前阶段和进度统计
+
+#### 数据分层原则
+
+| 文件 | 存储内容 | 示例 |
+|------|---------|------|
+| `project.json` | 项目概述 `overview` | `overview: {"synopsis": "...", "genre": "...", "theme": "...", "world_setting": "..."}` |
+| `project.json` | 角色/线索的**完整定义** | `characters: {"姜月茴": {"description": "...", "character_sheet": "..."}}` |
+| `scripts/episode_N.json` | 本集出现的角色/线索**名称列表** | `characters_in_episode: ["姜月茴", "裴与"]` |
+| `scenes[].xxx_in_scene` | 本场景出现的角色/线索**名称列表** | `characters_in_scene: ["姜月茴"]` |
+
+**原则**: 角色和线索的 description、character_sheet、voice_style 等属性**只存储在 project.json**，episode 和 scene 级别仅存储引用（名称列表）。
+
+#### 完整示例
+
+```json
+{
+  "title": "重生之皇后威武",
+  "content_mode": "narration",
+  "style": "古装宫廷风格，精致唯美画面",
+  "overview": {
+    "synopsis": "讲述姜月茴重生后，从受辱皇后逆袭成为权倾朝野的故事...",
+    "genre": "古装宫斗、重生复仇",
+    "theme": "复仇与救赎、女性觉醒",
+    "world_setting": "架空古代皇朝，以后宫和朝堂为主要场景...",
+    "generated_at": "2025-01-27T10:00:00Z"
+  },
+  "aspect_ratio": {
+    "design": "16:9",
+    "grid": "16:9",
+    "storyboard": "9:16",
+    "video": "9:16"
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "title": "襁褓惊变",
+      "script_file": "scripts/episode_1.json",
+      "status": "draft",
+      "segments_count": 15
+    }
+  ],
+  "characters": {
+    "姜月茴": {
+      "description": "二十出头女子，鹅蛋脸，柳叶眉，杏眼明亮有神...",
+      "character_sheet": "characters/姜月茴.png",
+      "voice_style": "温柔但有威严，生气时冷冽如冰"
+    },
+    "裴与": {
+      "description": "二十七八岁男子，身高八尺，剑眉星目...",
+      "character_sheet": "characters/裴与.png",
+      "voice_style": "初期意气风发，后期嘶哑绝望"
+    }
+  },
+  "clues": {
+    "玉佩": {
+      "type": "prop",
+      "description": "翠绿色祖传玉佩，雕刻着莲花纹样",
+      "importance": "major",
+      "clue_sheet": "clues/玉佩.png"
+    }
+  },
+  "status": {...}
+}
+```
 
 ### 线索数据结构
 
@@ -243,14 +382,15 @@ projects/{项目名}/
 
 ### 在场景中使用线索
 
-在剧本的场景中添加 `clues_in_scene` 字段：
+在剧本的场景中添加 `clues_in_scene` 或 `clues_in_segment` 字段：
 
 ```json
 {
-  "scene_id": "E1S3",
-  "characters_in_scene": ["姜月茴"],
-  "clues_in_scene": ["玉佩", "老槐树"],
-  "visual": { ... }
+  "segment_id": "E1S03",
+  "characters_in_segment": ["姜月茴"],
+  "clues_in_segment": ["玉佩", "老槐树"],
+  "image_prompt": "姜府后花园，百年老槐树下。中景镜头，姜月茴穿着淡青色绣花罗裙，手中握着翠绿色玉佩，若有所思地望向远方。午后斜阳从树叶间洒落，营造出怀旧伤感的氛围。",
+  "video_prompt": "中景镜头，姜府后花园。姜月茴站在老槐树下，轻轻摩挲手中的玉佩，眼神中带着回忆。微风吹动衣袂，树叶沙沙作响。镜头静态，午后斜阳光线，怀旧伤感的氛围。"
 }
 ```
 

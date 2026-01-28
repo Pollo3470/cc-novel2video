@@ -1,5 +1,5 @@
 """
-漫剧项目管理 WebUI - FastAPI 主应用
+视频项目管理 WebUI - FastAPI 主应用
 
 启动方式:
     cd /Users/pollochen/Documents/ai-anime
@@ -22,8 +22,8 @@ from webui.server.routers import projects, characters, clues, files
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title="漫剧项目管理 WebUI",
-    description="AI 漫剧生成工作空间的 Web 管理界面",
+    title="视频项目管理 WebUI",
+    description="AI 视频生成工作空间的 Web 管理界面",
     version="1.0.0"
 )
 
@@ -63,7 +63,7 @@ async def serve_project():
 @app.get("/health")
 async def health_check():
     """健康检查"""
-    return {"status": "ok", "message": "漫剧项目管理 WebUI 运行正常"}
+    return {"status": "ok", "message": "视频项目管理 WebUI 运行正常"}
 
 
 if __name__ == "__main__":

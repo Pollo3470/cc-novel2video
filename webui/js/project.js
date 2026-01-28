@@ -4,6 +4,7 @@
 
 let currentProject = null;
 let currentScripts = {};
+let currentDrafts = {};
 let projectName = null;
 let cacheBuster = Date.now();
 
@@ -36,6 +37,15 @@ async function loadProject() {
         currentProject = data.project;
         currentScripts = data.scripts || {};
 
+        // 加载草稿数据
+        try {
+            const draftsData = await API.listDrafts(projectName);
+            currentDrafts = draftsData.drafts || {};
+        } catch (e) {
+            console.log('No drafts found:', e);
+            currentDrafts = {};
+        }
+
         renderProjectHeader();
         renderOverview();
         renderCharacters();
@@ -57,7 +67,7 @@ async function loadProject() {
  * 渲染项目头部
  */
 function renderProjectHeader() {
-    document.title = `${currentProject.title} - 漫剧项目管理`;
+    document.title = `${currentProject.title} - 视频项目管理`;
     document.getElementById('project-title').textContent = currentProject.title || projectName;
 
     const phaseLabels = {
@@ -77,12 +87,38 @@ function renderProjectHeader() {
 }
 
 /**
+ * 更新画面比例提示
+ */
+function updateAspectRatioHint(contentMode) {
+    const hint = document.getElementById('aspect-ratio-hint');
+    if (hint) {
+        if (contentMode === 'narration') {
+            hint.textContent = '分镜/视频: 9:16 | 设计图/宫格: 16:9';
+        } else {
+            hint.textContent = '所有资源: 16:9 横屏';
+        }
+    }
+}
+
+/**
  * 渲染概览页
  */
 function renderOverview() {
     // 填充表单
     document.getElementById('edit-title').value = currentProject.title || '';
     document.getElementById('edit-style').value = currentProject.style || '';
+
+    // 设置内容模式
+    const contentMode = currentProject.content_mode || 'narration';
+    const contentModeSelect = document.getElementById('edit-content-mode');
+    if (contentModeSelect) {
+        contentModeSelect.value = contentMode;
+        updateAspectRatioHint(contentMode);
+        contentModeSelect.onchange = () => updateAspectRatioHint(contentModeSelect.value);
+    }
+
+    // 渲染故事概述
+    renderOverviewSection();
 
     // 渲染进度统计
     const progress = currentProject.status?.progress || {};
@@ -109,6 +145,32 @@ function renderOverview() {
             </div>
         `;
     }).join('');
+}
+
+/**
+ * 渲染故事概述区域
+ */
+function renderOverviewSection() {
+    const overview = currentProject.overview || {};
+    const emptyState = document.getElementById('overview-empty-state');
+    const form = document.getElementById('overview-form');
+
+    // 检查是否有概述内容
+    const hasOverview = overview.synopsis || overview.genre || overview.theme || overview.world_setting;
+
+    if (hasOverview) {
+        emptyState.classList.add('hidden');
+        form.classList.remove('hidden');
+
+        // 填充表单
+        document.getElementById('edit-synopsis').value = overview.synopsis || '';
+        document.getElementById('edit-genre').value = overview.genre || '';
+        document.getElementById('edit-theme').value = overview.theme || '';
+        document.getElementById('edit-world-setting').value = overview.world_setting || '';
+    } else {
+        emptyState.classList.remove('hidden');
+        form.classList.add('hidden');
+    }
 }
 
 /**
@@ -239,7 +301,7 @@ function renderEpisodes() {
         container.innerHTML = `
             <div class="text-center py-12 text-gray-500">
                 <p>暂无剧集</p>
-                <p class="text-sm mt-2">使用 /novel-to-script 命令生成剧本</p>
+                <p class="text-sm mt-2">系统会自动调用 novel-to-storyboard-script agent 生成剧本</p>
             </div>
         `;
         return;
@@ -248,13 +310,20 @@ function renderEpisodes() {
     container.innerHTML = episodes.map(ep => {
         const scriptFile = ep.script_file?.replace('scripts/', '') || '';
         const script = currentScripts[scriptFile] || {};
-        const scenes = script.scenes || [];
+        const contentMode = script.content_mode || currentProject.content_mode || 'narration';
+        const isNarrationMode = contentMode === 'narration' && script.segments;
+        const items = isNarrationMode ? (script.segments || []) : (script.scenes || []);
+        const episodeNum = ep.episode.toString();
+        const drafts = currentDrafts[episodeNum] || [];
 
         const statusClass = {
             'draft': 'bg-gray-600',
             'in_production': 'bg-yellow-600',
             'completed': 'bg-green-600'
         }[ep.status] || 'bg-gray-600';
+
+        const modeLabel = isNarrationMode ? '说书模式' : '剧集动画';
+        const itemLabel = isNarrationMode ? '片段' : '场景';
 
         return `
             <div class="bg-gray-800 rounded-lg overflow-hidden">
@@ -263,7 +332,7 @@ function renderEpisodes() {
                         <span class="text-xl font-bold text-gray-400">E${ep.episode}</span>
                         <div>
                             <h3 class="font-semibold text-white">${ep.title || `第 ${ep.episode} 集`}</h3>
-                            <p class="text-sm text-gray-400">${ep.scenes_count || 0} 个场景</p>
+                            <p class="text-sm text-gray-400">${items.length} 个${itemLabel} · ${modeLabel}</p>
                         </div>
                     </div>
                     <div class="flex items-center space-x-4">
@@ -273,14 +342,173 @@ function renderEpisodes() {
                         </svg>
                     </div>
                 </div>
-                <div class="episode-content hidden border-t border-gray-700 p-4">
-                    <div class="scene-grid">
-                        ${scenes.map(scene => renderSceneCard(scene, scriptFile)).join('')}
+                <div class="episode-content hidden border-t border-gray-700">
+                    ${renderDraftsSection(episodeNum, drafts, contentMode)}
+                    <div class="p-4">
+                        ${isNarrationMode ? renderNarrationContent(script, scriptFile) : renderDramaContent(script, scriptFile)}
                     </div>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+/**
+ * 渲染说书模式内容（直接显示片段列表，无多宫格图）
+ */
+function renderNarrationContent(script, scriptFile) {
+    const segments = script.segments || [];
+
+    return `
+        <h4 class="text-sm font-medium text-gray-400 mb-3">片段列表</h4>
+        <div class="segment-grid">
+            ${segments.map(seg => renderSegmentCard(seg, scriptFile)).join('')}
+        </div>
+    `;
+}
+
+/**
+ * 渲染剧集动画模式内容（场景列表）
+ */
+function renderDramaContent(script, scriptFile) {
+    const scenes = script.scenes || [];
+
+    return `
+        <h4 class="text-sm font-medium text-gray-400 mb-3">场景列表</h4>
+        <div class="scene-grid">
+            ${scenes.map(scene => renderSceneCard(scene, scriptFile)).join('')}
+        </div>
+    `;
+}
+
+/**
+ * 渲染多宫格图区域（仅 drama 模式使用）
+ */
+function renderGridImages(items, contentMode = 'drama') {
+    // narration 模式不渲染多宫格图
+    if (contentMode === 'narration') {
+        return '';
+    }
+
+    // 按 storyboard_grid 分组
+    const gridGroups = {};
+    items.forEach(item => {
+        const grid = item.generated_assets?.storyboard_grid;
+        if (grid) {
+            if (!gridGroups[grid]) {
+                gridGroups[grid] = [];
+            }
+            gridGroups[grid].push(item.scene_id || item.segment_id);
+        }
+    });
+
+    if (Object.keys(gridGroups).length === 0) {
+        return '';
+    }
+
+    return `
+        <div class="mb-6 p-4 bg-gray-750 rounded-lg">
+            <h4 class="text-sm font-medium text-gray-400 mb-3">📋 多宫格预览图</h4>
+            <div class="grid grid-cols-3 gap-4">
+                ${Object.entries(gridGroups).map(([gridPath, segmentIds]) => {
+                    const gridUrl = `${API.getFileUrl(projectName, gridPath)}?t=${cacheBuster}`;
+                    return `
+                        <div class="bg-gray-800 rounded-lg overflow-hidden">
+                            <img src="${gridUrl}"
+                                 class="w-full aspect-video object-cover cursor-pointer hover:opacity-80"
+                                 onclick="openLightbox('${gridUrl}', '多宫格预览图')">
+                            <div class="p-2 text-xs text-gray-400">
+                                包含: ${segmentIds.join(', ')}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 渲染片段卡片（说书模式）
+ */
+function renderSegmentCard(segment, scriptFile) {
+    const assets = segment.generated_assets || {};
+    const storyboardUrl = assets.storyboard_image
+        ? `${API.getFileUrl(projectName, assets.storyboard_image)}?t=${cacheBuster}`
+        : null;
+
+    const statusClass = {
+        'completed': 'bg-green-600',
+        'storyboard_ready': 'bg-blue-600',
+        'in_progress': 'bg-yellow-600',
+        'pending': 'bg-gray-600'
+    }[assets.status] || 'bg-gray-600';
+
+    return `
+        <div class="segment-card bg-gray-700 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+             onclick="editSegment('${segment.segment_id}', '${scriptFile}')">
+            <div class="aspect-portrait bg-gray-800 relative">
+                ${storyboardUrl
+                    ? `<img src="${storyboardUrl}" alt="${segment.segment_id}" class="w-full h-full object-cover">`
+                    : `<div class="w-full h-full flex items-center justify-center text-gray-600">
+                         <span class="text-2xl">🎬</span>
+                       </div>`
+                }
+                <div class="absolute top-2 left-2 px-2 py-0.5 text-xs rounded ${statusClass}">${segment.segment_id}</div>
+                <div class="absolute bottom-2 right-2 px-2 py-0.5 bg-black bg-opacity-70 text-xs rounded">${segment.duration_seconds || 4}s</div>
+                ${segment.segment_break ? `<div class="absolute bottom-2 left-2 px-2 py-0.5 bg-orange-600 text-xs rounded">转场</div>` : ''}
+            </div>
+            <div class="p-2">
+                <p class="text-xs text-gray-400 line-clamp-2">${segment.novel_text?.substring(0, 40) || segment.image_prompt?.substring(0, 40) || '无描述'}${(segment.novel_text?.length > 40 || segment.image_prompt?.length > 40) ? '...' : ''}</p>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * 渲染草稿区域
+ * @param {string} episodeNum - 剧集编号
+ * @param {Array} drafts - 草稿文件列表
+ * @param {string} contentMode - 内容模式 ('narration' 或 'drama')
+ */
+function renderDraftsSection(episodeNum, drafts, contentMode) {
+    // 根据 content_mode 选择不同的文件命名
+    // narration 模式：3 步流程（无宫格切分步骤）
+    // drama 模式：3 步流程
+    const stepInfo = contentMode === 'narration' ? [
+        { num: 1, name: '片段拆分（含 segment_break）', file: 'step1_segments.md', color: 'blue' },
+        { num: 2, name: '角色表/线索表', file: 'step2_character_clue_tables.md', color: 'green' }
+        // Step 3 输出直接是 scripts/episode_N.json，不在草稿中显示
+    ] : [
+        { num: 1, name: '规范化剧本', file: 'step1_normalized_script.md', color: 'blue' },
+        { num: 2, name: '镜头预算表', file: 'step2_shot_budget.md', color: 'green' },
+        { num: 3, name: '角色表/线索表', file: 'step3_character_clue_tables.md', color: 'purple' }
+    ];
+
+    const draftFiles = drafts.map(d => d.name);
+
+    return `
+        <div class="p-4 bg-gray-750 border-b border-gray-700">
+            <h4 class="text-sm font-medium text-gray-400 mb-3">📝 剧本草稿</h4>
+            <div class="flex flex-wrap gap-2">
+                ${stepInfo.map(step => {
+                    const exists = draftFiles.includes(step.file);
+                    const bgClass = exists ? `bg-${step.color}-600 hover:bg-${step.color}-700` : 'bg-gray-700 hover:bg-gray-600';
+                    const icon = exists ? '✓' : '○';
+
+                    return `
+                        <button
+                            onclick="openDraftModal(${episodeNum}, ${step.num}, ${exists}, '${contentMode}')"
+                            class="flex items-center space-x-2 px-3 py-2 ${bgClass} rounded-lg text-sm transition-colors"
+                        >
+                            <span>${icon}</span>
+                            <span>Step ${step.num}: ${step.name}</span>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
 }
 
 /**
@@ -362,6 +590,15 @@ function setupEventListeners() {
         await saveProjectInfo();
     };
 
+    // 故事概述表单
+    document.getElementById('overview-form').onsubmit = async (e) => {
+        e.preventDefault();
+        await saveOverview();
+    };
+
+    // 重新生成概述按钮
+    document.getElementById('regenerate-overview-btn').onclick = regenerateOverview;
+
     // 人物模态框
     document.getElementById('add-character-btn').onclick = () => openCharacterModal();
     document.getElementById('character-form').onsubmit = (e) => {
@@ -382,13 +619,19 @@ function setupEventListeners() {
         saveScene();
     };
 
+    // 片段模态框（说书模式）
+    document.getElementById('segment-form').onsubmit = (e) => {
+        e.preventDefault();
+        saveSegment();
+    };
+
     // 关闭模态框
     document.querySelectorAll('.close-modal').forEach(btn => {
         btn.onclick = closeAllModals;
     });
 
     // 点击背景关闭模态框
-    ['character-modal', 'clue-modal', 'scene-modal', 'source-modal'].forEach(id => {
+    ['character-modal', 'clue-modal', 'scene-modal', 'segment-modal', 'source-modal', 'draft-modal'].forEach(id => {
         document.getElementById(id).onclick = (e) => {
             if (e.target.id === id) closeAllModals();
         };
@@ -419,6 +662,16 @@ function setupEventListeners() {
         e.preventDefault();
         saveSourceFile();
     };
+
+    // 草稿模态框
+    document.getElementById('draft-form').onsubmit = (e) => {
+        e.preventDefault();
+        saveDraft();
+    };
+
+    // 草稿编辑/预览模式切换
+    document.getElementById('draft-mode-edit').onclick = () => toggleDraftMode('edit');
+    document.getElementById('draft-mode-preview').onclick = () => toggleDraftMode('preview');
 }
 
 /**
@@ -446,14 +699,17 @@ function switchTab(tabName) {
  */
 async function saveProjectInfo() {
     try {
+        const contentModeSelect = document.getElementById('edit-content-mode');
         const updates = {
             title: document.getElementById('edit-title').value.trim(),
-            style: document.getElementById('edit-style').value.trim()
+            style: document.getElementById('edit-style').value.trim(),
+            content_mode: contentModeSelect ? contentModeSelect.value : 'narration'
         };
 
         await API.updateProject(projectName, updates);
         currentProject.title = updates.title;
         currentProject.style = updates.style;
+        currentProject.content_mode = updates.content_mode;
         renderProjectHeader();
         alert('保存成功');
     } catch (error) {
@@ -670,6 +926,81 @@ async function deleteClue(name) {
 
 // ==================== 场景管理 ====================
 
+let currentEditingSegment = null;
+
+/**
+ * 编辑片段（说书模式）
+ */
+function editSegment(segmentId, scriptFile) {
+    const script = currentScripts[scriptFile];
+    if (!script) return;
+
+    const segment = script.segments?.find(s => s.segment_id === segmentId);
+    if (!segment) return;
+
+    currentEditingSegment = { segmentId, scriptFile, segment };
+
+    const modal = document.getElementById('segment-modal');
+    document.getElementById('segment-modal-id').textContent = segmentId;
+    document.getElementById('segment-id').value = segmentId;
+    document.getElementById('segment-script-file').value = scriptFile;
+
+    // 填充表单
+    document.getElementById('segment-novel-text').textContent = segment.novel_text || '（无原文）';
+    document.getElementById('segment-duration').value = segment.duration_seconds || 4;
+    document.getElementById('segment-image-prompt').value = segment.image_prompt || '';
+    document.getElementById('segment-video-prompt').value = segment.video_prompt || '';
+    document.getElementById('segment-break').value = segment.segment_break ? 'true' : 'false';
+
+    // 显示分镜图预览
+    const assets = segment.generated_assets || {};
+    const storyboardContainer = document.getElementById('segment-storyboard');
+
+    if (assets.storyboard_image) {
+        const storyboardUrl = `${API.getFileUrl(projectName, assets.storyboard_image)}?t=${cacheBuster}`;
+        storyboardContainer.innerHTML = `
+            <div class="relative group w-full h-full">
+                <img src="${storyboardUrl}" class="w-full h-full object-cover cursor-pointer" onclick="openLightbox('${storyboardUrl}', '分镜图 ${segmentId}')">
+                <button onclick="openLightbox('${storyboardUrl}', '分镜图 ${segmentId}')"
+                        class="absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-70"
+                        title="放大查看">
+                    <svg class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                </button>
+            </div>`;
+    } else {
+        storyboardContainer.innerHTML = '<span class="text-gray-500">暂无分镜图</span>';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+/**
+ * 保存片段
+ */
+async function saveSegment() {
+    const segmentId = document.getElementById('segment-id').value;
+    const scriptFile = document.getElementById('segment-script-file').value;
+
+    const updates = {
+        script_file: scriptFile,
+        duration_seconds: parseInt(document.getElementById('segment-duration').value) || 4,
+        segment_break: document.getElementById('segment-break').value === 'true',
+        image_prompt: document.getElementById('segment-image-prompt').value,
+        video_prompt: document.getElementById('segment-video-prompt').value
+    };
+
+    try {
+        await API.updateSegment(projectName, segmentId, updates);
+        closeAllModals();
+        currentEditingSegment = null;
+        await loadProject();
+    } catch (error) {
+        alert('保存失败: ' + error.message);
+    }
+}
+
 function editScene(sceneId, scriptFile) {
     const script = currentScripts[scriptFile];
     if (!script) return;
@@ -685,11 +1016,8 @@ function editScene(sceneId, scriptFile) {
     // 填充表单
     document.getElementById('scene-duration').value = scene.duration_seconds || 6;
     document.getElementById('scene-segment-break').value = scene.segment_break ? 'true' : 'false';
-    document.getElementById('scene-visual-desc').value = scene.visual?.description || '';
-    document.getElementById('scene-shot-type').value = scene.visual?.shot_type || '';
-    document.getElementById('scene-mood').value = scene.visual?.mood || '';
-    document.getElementById('scene-dialogue').value = scene.dialogue?.text || '';
-    document.getElementById('scene-speaker').value = scene.dialogue?.speaker || '';
+    document.getElementById('scene-image-prompt').value = scene.image_prompt || '';
+    document.getElementById('scene-video-prompt').value = scene.video_prompt || '';
 
     // 显示预览
     const assets = scene.generated_assets || {};
@@ -729,15 +1057,8 @@ async function saveScene() {
     const updates = {
         duration_seconds: parseInt(document.getElementById('scene-duration').value) || 6,
         segment_break: document.getElementById('scene-segment-break').value === 'true',
-        visual: {
-            description: document.getElementById('scene-visual-desc').value,
-            shot_type: document.getElementById('scene-shot-type').value,
-            mood: document.getElementById('scene-mood').value
-        },
-        dialogue: {
-            text: document.getElementById('scene-dialogue').value,
-            speaker: document.getElementById('scene-speaker').value
-        }
+        image_prompt: document.getElementById('scene-image-prompt').value,
+        video_prompt: document.getElementById('scene-video-prompt').value
     };
 
     try {
@@ -957,7 +1278,221 @@ async function handleSourceUpload(e) {
         await API.uploadFile(projectName, 'source', file);
         await renderSourceFiles();
         e.target.value = ''; // 重置 input
+
+        // 上传成功后尝试自动生成概述
+        await tryAutoGenerateOverview();
     } catch (error) {
         alert('上传失败: ' + error.message);
+    }
+}
+
+// ==================== 草稿管理 ====================
+
+/**
+ * 切换草稿编辑/预览模式
+ * @param {string} mode - 'edit' 或 'preview'
+ */
+function toggleDraftMode(mode) {
+    const textarea = document.getElementById('draft-content');
+    const preview = document.getElementById('draft-preview');
+    const editBtn = document.getElementById('draft-mode-edit');
+    const previewBtn = document.getElementById('draft-mode-preview');
+
+    if (mode === 'edit') {
+        textarea.classList.remove('hidden');
+        preview.classList.add('hidden');
+        editBtn.classList.remove('bg-gray-600', 'text-gray-300');
+        editBtn.classList.add('bg-blue-600', 'text-white');
+        previewBtn.classList.remove('bg-blue-600', 'text-white');
+        previewBtn.classList.add('bg-gray-600', 'text-gray-300');
+    } else {
+        textarea.classList.add('hidden');
+        preview.classList.remove('hidden');
+        preview.innerHTML = marked.parse(textarea.value || '*无内容*');
+        editBtn.classList.remove('bg-blue-600', 'text-white');
+        editBtn.classList.add('bg-gray-600', 'text-gray-300');
+        previewBtn.classList.remove('bg-gray-600', 'text-gray-300');
+        previewBtn.classList.add('bg-blue-600', 'text-white');
+    }
+}
+
+/**
+ * 打开草稿编辑模态框
+ * @param {number} episode - 剧集编号
+ * @param {number} stepNum - 步骤编号 (1, 2, 3)
+ * @param {boolean} exists - 草稿文件是否存在
+ * @param {string} contentMode - 内容模式 ('narration' 或 'drama')
+ */
+async function openDraftModal(episode, stepNum, exists, contentMode) {
+    const modal = document.getElementById('draft-modal');
+    // 根据 content_mode 选择不同的步骤名称
+    const stepNames = contentMode === 'narration' ? {
+        1: '片段拆分',
+        2: '宫格切分规划',
+        3: '角色表/线索表'
+    } : {
+        1: '规范化剧本',
+        2: '镜头预算表',
+        3: '角色表/线索表'
+    };
+
+    document.getElementById('draft-modal-title').textContent = `Step ${stepNum}: ${stepNames[stepNum]} (第 ${episode} 集)`;
+    document.getElementById('draft-episode').value = episode;
+    document.getElementById('draft-step').value = stepNum;
+
+    if (exists) {
+        try {
+            const content = await API.getDraftContent(projectName, episode, stepNum);
+            document.getElementById('draft-content').value = content;
+            // 有内容时默认显示预览模式
+            if (content && content.trim()) {
+                toggleDraftMode('preview');
+            } else {
+                toggleDraftMode('edit');
+            }
+        } catch (error) {
+            document.getElementById('draft-content').value = '';
+            toggleDraftMode('edit');
+            console.error('加载草稿失败:', error);
+        }
+    } else {
+        document.getElementById('draft-content').value = '';
+        // 无内容时默认显示编辑模式
+        toggleDraftMode('edit');
+    }
+
+    modal.classList.remove('hidden');
+}
+
+/**
+ * 保存草稿
+ */
+async function saveDraft() {
+    const episode = document.getElementById('draft-episode').value;
+    const stepNum = document.getElementById('draft-step').value;
+    const content = document.getElementById('draft-content').value;
+
+    try {
+        await API.saveDraft(projectName, episode, stepNum, content);
+        closeAllModals();
+        await loadProject();
+    } catch (error) {
+        alert('保存失败: ' + error.message);
+    }
+}
+
+// ==================== 项目概述管理 ====================
+
+/**
+ * 保存项目概述（手动编辑）
+ */
+async function saveOverview() {
+    try {
+        const updates = {
+            synopsis: document.getElementById('edit-synopsis').value.trim(),
+            genre: document.getElementById('edit-genre').value.trim(),
+            theme: document.getElementById('edit-theme').value.trim(),
+            world_setting: document.getElementById('edit-world-setting').value.trim()
+        };
+
+        await API.updateOverview(projectName, updates);
+
+        // 更新本地数据
+        if (!currentProject.overview) {
+            currentProject.overview = {};
+        }
+        Object.assign(currentProject.overview, updates);
+
+        alert('概述已保存');
+    } catch (error) {
+        alert('保存失败: ' + error.message);
+    }
+}
+
+/**
+ * 重新生成项目概述
+ */
+async function regenerateOverview() {
+    if (!confirm('确定要重新生成项目概述吗？这将覆盖当前内容。')) {
+        return;
+    }
+
+    const btn = document.getElementById('regenerate-overview-btn');
+    const originalContent = btn.innerHTML;
+
+    try {
+        // 显示加载状态
+        btn.disabled = true;
+        btn.innerHTML = `
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>生成中...</span>
+        `;
+
+        const result = await API.generateOverview(projectName);
+
+        // 更新本地数据
+        currentProject.overview = result.overview;
+
+        // 重新渲染
+        renderOverviewSection();
+
+        alert('概述已重新生成');
+    } catch (error) {
+        alert('生成失败: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+    }
+}
+
+/**
+ * 上传源文件后自动生成概述（如果概述为空）
+ */
+async function tryAutoGenerateOverview() {
+    // 检查是否已有概述
+    const overview = currentProject.overview || {};
+    const hasOverview = overview.synopsis || overview.genre || overview.theme || overview.world_setting;
+
+    if (hasOverview) {
+        return; // 已有概述，不自动生成
+    }
+
+    // 检查是否有源文件
+    try {
+        const data = await API.listFiles(projectName);
+        const sourceFiles = data.files?.source || [];
+
+        if (sourceFiles.length === 0) {
+            return; // 没有源文件
+        }
+
+        // 自动生成概述
+        console.log('检测到源文件，自动生成项目概述...');
+
+        const btn = document.getElementById('regenerate-overview-btn');
+        const originalContent = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = `
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>自动生成中...</span>
+        `;
+
+        const result = await API.generateOverview(projectName);
+        currentProject.overview = result.overview;
+        renderOverviewSection();
+
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+
+        console.log('项目概述已自动生成');
+    } catch (error) {
+        console.error('自动生成概述失败:', error);
     }
 }

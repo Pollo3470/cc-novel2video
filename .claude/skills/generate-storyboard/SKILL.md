@@ -1,13 +1,48 @@
 ---
 name: generate-storyboard
-description: 使用 Gemini 图像 API 生成分镜图（两步流程）。使用场景：(1) 用户运行 /generate-storyboard 命令，(2) 剧本中有场景没有分镜图，(3) 用户想在视频生成前预览场景。通过两步流程确保人物一致性和高质量起始帧。
+description: 使用 Gemini 图像 API 生成分镜图。说书模式直接生成分镜图，剧集动画模式使用两步流程。使用场景：(1) 用户运行 /generate-storyboard 命令，(2) 剧本中有场景没有分镜图，(3) 用户想在视频生成前预览场景。
 ---
 
 # 生成分镜图
 
-使用 Gemini 3 Pro Image API 创建分镜图，采用两步流程确保质量和一致性。
+使用 Gemini 3 Pro Image API 创建分镜图。
 
-## 两步流程
+## 内容模式支持
+
+系统支持两种内容模式，生成流程和画面比例根据模式自动调整：
+
+| 模式 | 流程 | 画面比例 |
+|------|------|----------|
+| 说书+画面（默认） | **直接生成**（无多宫格） | **9:16 竖屏** |
+| 剧集动画 | 两步流程（多宫格→单独场景图） | 16:9 横屏 |
+
+> 画面比例通过 API 参数设置，不包含在 prompt 中。
+
+## 说书模式流程（narration）
+
+### 直接生成分镜图
+- 无需多宫格预览图步骤
+- 直接生成单独场景图（**9:16 竖屏**）
+- 使用 character_sheet 和 clue_sheet 作为参考图保持人物一致性
+- 保存为 `storyboards/scene_{segment_id}.png`
+- 更新剧本中的 `storyboard_image` 字段
+- 用于视频生成的起始帧
+
+### 数据结构
+
+```json
+{
+  "generated_assets": {
+    "storyboard_image": "storyboards/scene_E1S01.png",
+    "video_clip": null,
+    "status": "storyboard_ready"
+  }
+}
+```
+
+> 注意：narration 模式不使用 `storyboard_grid` 字段
+
+## 剧集动画模式流程（drama）
 
 ### 第一步：生成多宫格分镜图
 - 按批次处理场景（每批 4-6 个场景）
@@ -22,9 +57,57 @@ description: 使用 Gemini 图像 API 生成分镜图（两步流程）。使用
 - 以多宫格图和人物设计图作为参考
 - 为每个场景生成独立的高质量分镜图
 - Prompt 中明确指出参考多宫格中的哪个格子
+- 使用 16:9 横屏
 - 保存为 `storyboards/scene_{scene_id}.png`
 - 更新剧本中的 `storyboard_image` 字段
-- 用于视频生成的起始帧
+
+### 数据结构
+
+```json
+{
+  "generated_assets": {
+    "storyboard_grid": "storyboards/grid_001.png",
+    "storyboard_image": "storyboards/scene_E1S01.png",
+    "video_clip": null,
+    "status": "storyboard_ready"
+  }
+}
+```
+
+## 命令行用法
+
+### 说书模式（推荐）
+
+```bash
+# 直接生成所有缺失的分镜图
+python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
+    my_project script.json
+
+# 为指定片段重新生成
+python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
+    my_project script.json --segment-ids E1S01 E1S02
+```
+
+### 剧集动画模式
+
+```bash
+# 步骤 1：生成多宫格预览图
+python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
+    my_project script.json --grids --all
+
+# 步骤 2：生成单独场景图
+python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
+    my_project script.json --scenes
+```
+
+> **注意**：脚本会自动检测 content_mode，narration 模式下 `--grids`/`--scenes` 参数会被忽略。
+
+## 限流说明
+
+为了应对 API 限制，脚本内置了滑动窗口限流器：
+- 支持通过环境变量配置速率限制（见 CLAUDE.md）
+- 超出限制时会自动等待
+- 内置指数退避重试机制（最大重试 5 次）
 
 ## 工作流程
 
@@ -35,65 +118,16 @@ description: 使用 Gemini 图像 API 生成分镜图（两步流程）。使用
 
 2. **生成分镜图**
    - 运行 `.claude/skills/generate-storyboard/scripts/generate_storyboard.py`
-   - 默认执行完整两步流程
-   - 可选只生成多宫格图（用于预览审核）
-   - 可选只生成单独场景图（多宫格图已审核通过后）
+   - 脚本自动检测 content_mode 并选择对应流程
 
-3. **审核检查点**
+3. **审核检查点**（drama 模式）
    - 展示每张多宫格分镜图
    - 询问用户是否批准或重新生成
-   - 允许调整 prompt
 
 4. **更新剧本**
-   - 更新 `storyboard_grid` 路径（多宫格图）
-   - 更新 `storyboard_image` 路径（单独场景图）
+   - 更新 `storyboard_image` 路径
+   - drama 模式额外更新 `storyboard_grid` 路径
    - 更新场景状态
-
-## 命令行用法
-
-```bash
-# 步骤 1：生成多宫格预览图
-# 生成所有缺失的 grids
-python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
-    my_project script.json --grids --all
-
-# 生成指定批次的 grid
-python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
-    my_project script.json --grids --batch 1
-
-# 步骤 2：生成单独场景图（需要已生成 grids）
-# 生成所有缺失的 scenes
-python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
-    my_project script.json --scenes
-
-# 为指定场景重新生成 scenes
-python .claude/skills/generate-storyboard/scripts/generate_storyboard.py \
-    my_project script.json --scenes --scene-ids E1S01 E1S02
-```
-
-> **注意**：必须显式指定 `--grids` 或 `--scenes`，不再支持混合运行。
-
-## 限流说明
-
-为了应对 API 限制，脚本内置了滑动窗口限流器：
-- 支持通过环境变量配置速率限制（见 CLAUDE.md）
-- 超出限制时会自动等待
-- 内置指数退避重试机制（最大重试 5 次）
-
-## 数据结构
-
-```json
-{
-  "generated_assets": {
-    "storyboard_grid": "storyboards/grid_001.png",
-    "storyboard_image": "storyboards/scene_E1S01.png",
-    "video_clip": null,
-    "status": "in_progress"
-  }
-}
-```
-
-## 文件命名规范
 
 ```
 projects/{项目名}/storyboards/
@@ -120,7 +154,7 @@ projects/{项目名}/storyboards/
 ...
 
 风格要求：
-- 电影分镜图风格，动漫/漫画画风
+- 电影分镜图风格，{项目 style}
 - 每个宫格有清晰的画面焦点
 - 宫格之间用细线分隔
 
@@ -132,7 +166,7 @@ projects/{项目名}/storyboards/
 ```
 根据提供的多宫格分镜参考图，生成其中 第 X 行第 Y 列（宫格 N）的单独高清场景图。
 
-参考图是一张 [2x2/2x3] 布局的多宫格分镜图，请将该格子的内容单独生成为一张完整的 16:9 横屏图片。
+参考图是一张 [2x2/2x3] 布局的多宫格分镜图，请将该格子的内容单独生成为一张完整的图片。
 
 场景 [scene_id] 的详细要求：
 - 画面描述：[visual.description]
@@ -144,12 +178,14 @@ projects/{项目名}/storyboards/
 - 动作：[action]
 
 风格要求：
-- 电影分镜图风格，动漫/漫画画风
+- 电影分镜图风格，根据项目 style 设定
 - 画面构图完整，焦点清晰
 - 保持与多宫格参考图中对应格子的风格和构图一致
 
 人物必须与提供的人物参考图完全一致。
 ```
+
+> 画面比例（9:16 或 16:9）通过 API 参数设置，不写入 prompt。
 
 ### 字段说明
 
@@ -164,14 +200,14 @@ projects/{项目名}/storyboards/
 
 ## 人物一致性
 
-**关键**：始终传入人物参考图以保持一致性。
+**关键**：始终传入人物参考图以保持一致性。画面比例根据内容模式自动选择。
 
 ```python
 from lib.gemini_client import GeminiClient
 
 client = GeminiClient()
 
-# 多宫格分镜图
+# 多宫格分镜图（始终 16:9）
 image = client.generate_image(
     prompt=grid_prompt,
     reference_images=[
@@ -182,14 +218,17 @@ image = client.generate_image(
     output_path=f"projects/{项目名}/storyboards/grid_{batch_id}.png"
 )
 
-# 单独场景图（多宫格图 + 人物参考图）
+# 单独场景图（根据内容模式选择画面比例）
+# 说书模式: 9:16, 剧集动画模式: 16:9
+storyboard_aspect_ratio = get_aspect_ratio(project_data, 'storyboard')
+
 image = client.generate_image(
     prompt=scene_prompt,
     reference_images=[
         f"projects/{项目名}/storyboards/grid_{batch_id}.png",  # 多宫格参考
         f"projects/{项目名}/characters/{人物名}.png"           # 人物参考
     ],
-    aspect_ratio="16:9",
+    aspect_ratio=storyboard_aspect_ratio,
     output_path=f"projects/{项目名}/storyboards/scene_{scene_id}.png"
 )
 ```
