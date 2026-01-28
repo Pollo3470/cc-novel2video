@@ -339,7 +339,7 @@ def generate_episode_video(
 
         try:
             print(f"    🎥 生成视频（{duration_str}秒）...")
-            client.generate_video(
+            output_path_result, _, _ = client.generate_video(
                 prompt=prompt,
                 start_image=storyboard_path,
                 aspect_ratio=video_aspect_ratio,
@@ -461,7 +461,7 @@ def generate_scene_video(
     print(f"   画面比例: {video_aspect_ratio}")
     print(f"   预计等待时间: 1-6 分钟")
 
-    client.generate_video(
+    output_path_result, _, _ = client.generate_video(
         prompt=prompt,
         start_image=storyboard_path,
         aspect_ratio=video_aspect_ratio,

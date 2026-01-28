@@ -1395,9 +1395,9 @@ class ProjectManager:
 
         return "\n\n".join(contents)
 
-    def generate_overview(self, project_name: str) -> Dict:
+    async def generate_overview(self, project_name: str) -> Dict:
         """
-        使用 Gemini API 生成项目概述
+        使用 Gemini API 异步生成项目概述
 
         Args:
             project_name: 项目名称
@@ -1406,6 +1406,7 @@ class ProjectManager:
             生成的 overview 字典，包含 synopsis, genre, theme, world_setting, generated_at
         """
         from google import genai
+        from google.oauth2 import service_account
 
         # 读取源文件内容
         source_content = self._read_source_files(project_name)
@@ -1415,20 +1416,47 @@ class ProjectManager:
         # 初始化 Gemini 客户端
         backend = os.environ.get('GEMINI_BACKEND', 'aistudio').lower()
         if backend == 'vertex':
-            api_key = os.environ.get('VERTEX_API_KEY')
-            if not api_key:
-                raise ValueError("VERTEX_API_KEY 环境变量未设置")
-            client = genai.Client(vertexai=True, api_key=api_key)
+            # Vertex AI 模式（使用 JSON 服务账号凭证）
+            credentials_dir = Path(__file__).parent.parent / 'vertex_keys'
+            credentials_files = list(credentials_dir.glob('*.json')) if credentials_dir.exists() else []
+
+            if not credentials_files:
+                raise ValueError(
+                    "未找到 Vertex AI 凭证文件\n"
+                    "请将服务账号 JSON 文件放入 vertex_keys/ 目录"
+                )
+
+            credentials_file = credentials_files[0]
+
+            # 从凭证文件读取项目 ID
+            with open(credentials_file) as f:
+                creds_data = json.load(f)
+            project_id = creds_data.get('project_id')
+
+            if not project_id:
+                raise ValueError(f"凭证文件 {credentials_file} 中未找到 project_id")
+
+            # 加载服务账号凭证
+            credentials = service_account.Credentials.from_service_account_file(
+                str(credentials_file)
+            )
+
+            client = genai.Client(
+                vertexai=True,
+                project=project_id,
+                location="us-central1",
+                credentials=credentials,
+            )
         else:
             api_key = os.environ.get('GEMINI_API_KEY')
             if not api_key:
                 raise ValueError("GEMINI_API_KEY 环境变量未设置")
             client = genai.Client(api_key=api_key)
 
-        # 调用 Gemini API（Structured Outputs）
+        # 调用 Gemini API（Structured Outputs）- 使用异步方法
         prompt = f"请分析以下小说内容，提取关键信息：\n\n{source_content}"
 
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model="gemini-3-flash-preview",
             contents=prompt,
             config={

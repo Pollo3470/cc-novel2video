@@ -275,7 +275,7 @@ async def update_segment(name: str, segment_id: str, req: UpdateSegmentRequest):
 async def generate_overview(name: str):
     """使用 AI 生成项目概述"""
     try:
-        overview = pm.generate_overview(name)
+        overview = await pm.generate_overview(name)
         return {"success": True, "overview": overview}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"项目 '{name}' 不存在")

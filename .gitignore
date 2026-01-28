@@ -29,7 +29,7 @@ Thumbs.db
 
 # Project specific
 projects/*
-*.skill
+vertex_keys/*
 
 # Keep project structure but ignore generated content
 !projects/.gitkeep

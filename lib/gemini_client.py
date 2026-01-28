@@ -196,21 +196,55 @@ class GeminiClient:
         self.types = types
         self.rate_limiter = rate_limiter
         self.backend = os.environ.get('GEMINI_BACKEND', 'aistudio').lower()
+        self.credentials = None  # 用于 Vertex AI 模式
+        self.project_id = None   # 用于 Vertex AI 模式
+        self.gcs_bucket = None   # 用于 Vertex AI 模式的视频延长输出
 
         if self.backend == 'vertex':
-            # Vertex AI 模式（使用 API Key）
-            self.api_key = api_key or os.environ.get('VERTEX_API_KEY')
-            if not self.api_key:
+            # Vertex AI 模式（使用 JSON 服务账号凭证）
+            from google.oauth2 import service_account
+            import json as json_module
+
+            # 查找凭证文件
+            credentials_dir = Path(__file__).parent.parent / 'vertex_keys'
+            credentials_files = list(credentials_dir.glob('*.json')) if credentials_dir.exists() else []
+
+            if not credentials_files:
                 raise ValueError(
-                    "使用 Vertex AI 后端时，VERTEX_API_KEY 环境变量必须设置\n"
-                    "请在 .env 文件中添加：VERTEX_API_KEY=your-vertex-api-key"
+                    "未找到 Vertex AI 凭证文件\n"
+                    "请将服务账号 JSON 文件放入 vertex_keys/ 目录"
                 )
+
+            credentials_file = credentials_files[0]  # 取第一个文件
+
+            # 从凭证文件读取项目 ID
+            with open(credentials_file) as f:
+                creds_data = json_module.load(f)
+            self.project_id = creds_data.get('project_id')
+
+            if not self.project_id:
+                raise ValueError(f"凭证文件 {credentials_file} 中未找到 project_id")
+
+            # 读取 GCS bucket 配置（用于视频延长）
+            self.gcs_bucket = os.environ.get('VERTEX_GCS_BUCKET')
+
+            # 加载服务账号凭证并添加必要的 scopes
+            VERTEX_SCOPES = [
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/generative-language",
+            ]
+            self.credentials = service_account.Credentials.from_service_account_file(
+                str(credentials_file),
+                scopes=VERTEX_SCOPES
+            )
 
             self.client = genai.Client(
                 vertexai=True,
-                api_key=self.api_key
+                project=self.project_id,
+                location="us-central1",
+                credentials=self.credentials,
             )
-            print("✓ 使用 Vertex AI 后端")
+            print(f"✓ 使用 Vertex AI 后端（凭证: {credentials_file.name}）")
         else:
             # AI Studio 模式（默认）
             self.api_key = api_key or os.environ.get('GEMINI_API_KEY')
@@ -337,336 +371,244 @@ class GeminiClient:
     def generate_video(
         self,
         prompt: str,
+        # 生成模式参数
         start_image: Optional[Union[str, Path, Image.Image]] = None,
         reference_images: Optional[List[dict]] = None,
+        # 延长模式参数
+        video: Optional[Union[str, Path]] = None,
+        # 配置参数
         aspect_ratio: str = "9:16",
         duration_seconds: str = "8",
         resolution: str = "720p",
         negative_prompt: str = "background music, BGM, soundtrack, musical accompaniment",
         output_path: Optional[Union[str, Path]] = None,
-        poll_interval: int = 10,
-        max_wait_time: int = 600
-    ) -> Path:
-        """
-        生成视频
-
-        Args:
-            prompt: 视频生成提示词（支持对话和音效描述）
-            start_image: 起始帧图片（image-to-video 模式）
-            reference_images: 参考图片列表，格式为 [{"image": path, "description": str}]
-            aspect_ratio: 宽高比，默认 9:16
-            duration_seconds: 视频时长，可选 "4", "6", "8"
-            resolution: 分辨率，可选 "720p", "1080p", "4k"
-            negative_prompt: 负面提示词，指定不想要的元素（默认禁止 BGM）
-            output_path: 输出路径
-            poll_interval: 轮询间隔（秒）
-            max_wait_time: 最大等待时间（秒）
-
-        Returns:
-            生成的视频文件路径
-
-        Note:
-            如需后续扩展视频，请使用 generate_video_with_ref() 方法
-        """
-        # 应用限流
-        if self.rate_limiter:
-            self.rate_limiter.acquire(self.VIDEO_MODEL)
-
-        # 添加参考图片（暂时禁用，与 image 参数可能冲突）
-        # 注意：referenceImages 与 start_image 可能不能同时使用
-        ref_imgs = None
-        # if reference_images:
-        #     ref_imgs = []
-        #     for ref in reference_images:
-        #         img = ref["image"]
-        #         if isinstance(img, (str, Path)):
-        #             img = Image.open(img)
-        #         ref_imgs.append(
-        #             self.types.VideoGenerationReferenceImage(
-        #                 image=img
-        #             )
-        #         )
-        #     # 使用参考图片时 duration 必须是 8
-        #     duration_seconds = "8"
-
-        # 构建配置
-        config = self.types.GenerateVideosConfig(
-            aspect_ratio=aspect_ratio,
-            resolution=resolution,
-            duration_seconds=duration_seconds,
-            negative_prompt=negative_prompt
-        )
-
-        # 准备起始帧（需要使用 types.Image 格式）
-        image_param = None
-        if start_image:
-            if isinstance(start_image, (str, Path)):
-                # 读取图片文件为 bytes
-                with open(start_image, 'rb') as f:
-                    image_bytes = f.read()
-                # 确定 MIME 类型
-                suffix = Path(start_image).suffix.lower()
-                mime_types = {
-                    '.png': 'image/png',
-                    '.jpg': 'image/jpeg',
-                    '.jpeg': 'image/jpeg',
-                    '.gif': 'image/gif',
-                    '.webp': 'image/webp'
-                }
-                mime_type = mime_types.get(suffix, 'image/png')
-                image_param = self.types.Image(
-                    image_bytes=image_bytes,
-                    mime_type=mime_type
-                )
-            elif isinstance(start_image, Image.Image):
-                # 将 PIL Image 转换为 bytes
-                buffer = io.BytesIO()
-                start_image.save(buffer, format='PNG')
-                image_bytes = buffer.getvalue()
-                image_param = self.types.Image(
-                    image_bytes=image_bytes,
-                    mime_type='image/png'
-                )
-            else:
-                image_param = start_image
-
-        # 调用 API
-        operation = self.client.models.generate_videos(
-            model=self.VIDEO_MODEL,
-            prompt=prompt,
-            image=image_param,
-            config=config
-        )
-
-        # 等待完成
-        elapsed = 0
-        while not operation.done:
-            if elapsed >= max_wait_time:
-                raise TimeoutError(f"视频生成超时（{max_wait_time}秒）")
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-            operation = self.client.operations.get(operation)
-            print(f"视频生成中... 已等待 {elapsed} 秒")
-
-        # 检查结果
-        if not operation.response or not operation.response.generated_videos:
-            print(f"DEBUG: Operation details: {operation}")
-            if hasattr(operation, 'error') and operation.error:
-                raise RuntimeError(f"视频生成失败: {operation.error}")
-            raise RuntimeError("视频生成失败: API 返回空结果")
-
-        # 下载视频
-        generated_video = operation.response.generated_videos[0]
-
-        if output_path:
-            output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # 下载视频文件（根据官方文档）
-            self.client.files.download(file=generated_video.video)
-            generated_video.video.save(str(output_path))
-
-            return output_path
-
-        return generated_video
-
-    @with_retry(max_attempts=3, backoff_seconds=(2, 4, 8))
-    def generate_video_with_ref(
-        self,
-        prompt: str,
-        start_image: Optional[Union[str, Path, Image.Image]] = None,
-        aspect_ratio: str = "9:16",
-        duration_seconds: str = "8",
-        resolution: str = "720p",
-        output_path: Optional[Union[str, Path]] = None,
+        output_gcs_uri: Optional[str] = None,
         poll_interval: int = 10,
         max_wait_time: int = 600
     ) -> tuple:
         """
-        生成视频并返回视频引用，用于后续扩展
+        统一的视频生成/延长方法
 
         Args:
-            prompt: 视频生成提示词（支持对话和音效描述）
+            prompt: 视频生成/延长提示词（支持对话和音效描述）
+
+            # 生成模式参数
             start_image: 起始帧图片（image-to-video 模式）
-            aspect_ratio: 宽高比，默认 9:16
-            duration_seconds: 视频时长，可选 "4", "6", "8"
-            resolution: 分辨率，扩展模式必须使用 720p
-            output_path: 输出路径
+            reference_images: 参考图片列表，格式为 [{"image": path, "description": str}]
+
+            # 延长模式参数
+            video: 要延长的视频，支持以下类型：
+                - Video 对象（来自之前调用的返回值）
+                - URI 字符串（gs:// 或 https://）
+                - 本地视频文件路径
+
+            # 配置参数
+            aspect_ratio: 宽高比，默认 9:16（生成模式使用）
+            duration_seconds: 视频时长，可选 "4", "6", "8"（生成模式使用）
+            resolution: 分辨率，可选 "720p", "1080p", "4k"（延长模式强制 720p）
+            negative_prompt: 负面提示词，指定不想要的元素（默认禁止 BGM）
+            output_path: 本地输出路径
+            output_gcs_uri: GCS 输出路径（Vertex AI 延长模式必须设置）
             poll_interval: 轮询间隔（秒）
             max_wait_time: 最大等待时间（秒）
 
         Returns:
-            (output_path, video_ref, video_uri) 三元组
-            - output_path: 视频文件路径
-            - video_ref: Video 对象，用于当前会话的 extend_video()
+            (output_path, video_ref, video_uri) 三元组：
+            - output_path: 视频文件路径（如果指定了 output_path）
+            - video_ref: Video 对象，用于后续 extend_video()
             - video_uri: 字符串 URI，可保存用于跨会话恢复
+
+        Examples:
+            # 1. 生成视频（从起始帧）
+            path, ref, uri = client.generate_video(
+                prompt="角色缓慢转身...",
+                start_image="storyboard.png",
+                output_path="output.mp4"
+            )
+
+            # 2. 延长视频（使用返回的 ref）
+            path2, ref2, uri2 = client.generate_video(
+                prompt="继续当前动作...",
+                video=ref,
+                output_path="output_extended.mp4"
+            )
+
+            # 3. 延长视频（使用本地文件）
+            path3, ref3, uri3 = client.generate_video(
+                prompt="继续...",
+                video="output.mp4",
+                output_path="output_extended2.mp4"
+            )
         """
         # 应用限流
         if self.rate_limiter:
             self.rate_limiter.acquire(self.VIDEO_MODEL)
 
-        # 扩展模式必须使用 720p
-        if resolution != "720p":
-            print(f"⚠️  扩展模式分辨率限制为 720p，已自动调整")
-            resolution = "720p"
+        # 判断模式：如果提供了 video 参数则为延长模式
+        is_extend_mode = video is not None
 
-        # 构建配置
-        config = self.types.GenerateVideosConfig(
-            aspect_ratio=aspect_ratio,
-            resolution=resolution,
-            duration_seconds=duration_seconds
-        )
+        if is_extend_mode:
+            # ===== 延长模式 =====
+            # 延长模式必须使用 720p，固定 7 秒
+            config_params = {
+                "number_of_videos": 1,
+                "resolution": "720p",
+                "duration_seconds": 7,
+                "generate_audio": True,
+            }
 
-        # 准备起始帧
-        image_param = self._prepare_image_param(start_image)
+            # Vertex AI 模式需要 output_gcs_uri
+            # 如果未提供，自动从环境变量构建
+            if self.backend == 'vertex':
+                if not output_gcs_uri and self.gcs_bucket:
+                    # 根据 output_path 生成 GCS URI
+                    if output_path:
+                        filename = Path(output_path).name
+                    else:
+                        import uuid
+                        filename = f"extend_{uuid.uuid4().hex[:8]}.mp4"
+                    output_gcs_uri = f"gs://{self.gcs_bucket}/video_extend/{filename}"
 
-        # 调用 API
-        operation = self.client.models.generate_videos(
-            model=self.VIDEO_MODEL,
-            prompt=prompt,
-            image=image_param,
-            config=config
-        )
+                if output_gcs_uri:
+                    config_params["output_gcs_uri"] = output_gcs_uri
+                else:
+                    raise ValueError(
+                        "Vertex AI 模式下延长视频需要 output_gcs_uri 或设置 VERTEX_GCS_BUCKET 环境变量"
+                    )
+
+            config = self.types.GenerateVideosConfig(**config_params)
+
+            # 准备视频参数
+            video_param, video_bytes = self._prepare_video_param(video)
+
+            if self.backend == 'vertex':
+                # Vertex AI 模式：使用 source 参数和 video_bytes
+                if video_bytes is None:
+                    raise ValueError(
+                        "Vertex AI 模式下延长视频需要提供 video_bytes，"
+                        "请传入本地视频文件路径或包含 video_bytes 的 Video 对象"
+                    )
+
+                source = self.types.GenerateVideosSource(
+                    prompt=prompt,
+                    video=self.types.Video(
+                        video_bytes=video_bytes,
+                        mime_type="video/mp4",
+                    ),
+                )
+
+                operation = self.client.models.generate_videos(
+                    model=self.VIDEO_MODEL,
+                    source=source,
+                    config=config
+                )
+            else:
+                # AI Studio 模式：使用 video 参数
+                operation = self.client.models.generate_videos(
+                    model=self.VIDEO_MODEL,
+                    video=video_param,
+                    prompt=prompt,
+                    config=config
+                )
+        else:
+            # ===== 生成模式 =====
+            # 构建配置
+            config = self.types.GenerateVideosConfig(
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                duration_seconds=duration_seconds,
+                negative_prompt=negative_prompt
+            )
+
+            # 准备起始帧
+            image_param = self._prepare_image_param(start_image)
+
+            # 调用 API
+            operation = self.client.models.generate_videos(
+                model=self.VIDEO_MODEL,
+                prompt=prompt,
+                image=image_param,
+                config=config
+            )
 
         # 等待完成
         elapsed = 0
+        mode_text = "扩展" if is_extend_mode else "生成"
         while not operation.done:
             if elapsed >= max_wait_time:
-                raise TimeoutError(f"视频生成超时（{max_wait_time}秒）")
+                raise TimeoutError(f"视频{mode_text}超时（{max_wait_time}秒）")
             time.sleep(poll_interval)
             elapsed += poll_interval
             operation = self.client.operations.get(operation)
-            print(f"视频生成中... 已等待 {elapsed} 秒")
+            print(f"视频{mode_text}中... 已等待 {elapsed} 秒")
 
         # 检查结果
         if not operation.response or not operation.response.generated_videos:
             print(f"DEBUG: Operation details: {operation}")
             if hasattr(operation, 'error') and operation.error:
-                raise RuntimeError(f"视频生成失败: {operation.error}")
-            raise RuntimeError("视频生成失败: API 返回空结果")
+                raise RuntimeError(f"视频{mode_text}失败: {operation.error}")
+            raise RuntimeError(f"视频{mode_text}失败: API 返回空结果")
 
         # 获取生成的视频和引用
         generated_video = operation.response.generated_videos[0]
         video_ref = generated_video.video
+        video_uri = video_ref.uri if video_ref else None
 
         if output_path:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # 下载视频文件
+            if is_extend_mode and self.backend == 'vertex' and output_gcs_uri:
+                # 从 GCS 下载视频
+                from google.cloud import storage
+
+                # 使用返回的实际 URI
+                actual_gcs_uri = video_uri if video_uri else output_gcs_uri
+
+                # 解析 gs://bucket-name/path/to/file
+                gcs_parts = actual_gcs_uri.replace('gs://', '').split('/', 1)
+                bucket_name = gcs_parts[0]
+                blob_name = gcs_parts[1] if len(gcs_parts) > 1 else ''
+
+                storage_client = storage.Client(
+                    credentials=self.credentials,
+                    project=self.project_id
+                )
+                bucket = storage_client.bucket(bucket_name)
+                blob = bucket.blob(blob_name)
+                blob.download_to_filename(str(output_path))
+                print(f"✓ 已从 {actual_gcs_uri} 下载视频")
+            else:
+                # 下载视频文件
+                self._download_video(video_ref, output_path)
+
+            return output_path, video_ref, video_uri
+
+        return None, video_ref, video_uri
+
+    def _download_video(self, video_ref, output_path: Path) -> None:
+        """
+        下载视频到本地文件
+
+        Args:
+            video_ref: Video 对象
+            output_path: 输出路径
+        """
+        if self.backend == 'vertex':
+            # Vertex AI 模式：从 video_bytes 直接保存
+            if video_ref and hasattr(video_ref, 'video_bytes') and video_ref.video_bytes:
+                with open(output_path, 'wb') as f:
+                    f.write(video_ref.video_bytes)
+            elif video_ref and hasattr(video_ref, 'uri') and video_ref.uri:
+                # 如果没有 video_bytes，尝试从 URI 下载
+                import urllib.request
+                urllib.request.urlretrieve(video_ref.uri, str(output_path))
+            else:
+                raise RuntimeError("视频生成成功但无法获取视频数据")
+        else:
+            # AI Studio 模式：使用 files.download
             self.client.files.download(file=video_ref)
             video_ref.save(str(output_path))
-
-            return output_path, video_ref, video_ref.uri
-
-        return None, video_ref, video_ref.uri
-
-    @with_retry(max_attempts=3, backoff_seconds=(2, 4, 8))
-    def extend_video(
-        self,
-        video_ref,
-        prompt: str,
-        output_path: Optional[Union[str, Path]] = None,
-        poll_interval: int = 10,
-        max_wait_time: int = 600
-    ) -> tuple:
-        """
-        扩展现有视频（每次 +7 秒，最多扩展 20 次）
-
-        Args:
-            video_ref: 上一次生成的视频引用对象
-                      （来自 generate_video_with_ref 或 extend_video 的返回值）
-            prompt: 扩展提示词，描述接下来的场景内容
-            output_path: 输出路径
-            poll_interval: 轮询间隔（秒）
-            max_wait_time: 最大等待时间（秒）
-
-        Returns:
-            (output_path, new_video_ref, new_video_uri) 三元组
-            - output_path: 扩展后的视频文件路径
-            - new_video_ref: 新的 Video 对象，用于继续扩展
-            - new_video_uri: 字符串 URI，可保存用于跨会话恢复
-
-        Raises:
-            ValueError: video_ref 无效
-            RuntimeError: 视频扩展失败
-            TimeoutError: 扩展超时
-
-        Note:
-            - 仅支持 Veo 3.1 模型生成的视频
-            - 视频在服务器保存 2 天，扩展时重置计时器
-            - 单个视频最长 148 秒
-        """
-        # 应用限流
-        if self.rate_limiter:
-            self.rate_limiter.acquire(self.VIDEO_MODEL)
-
-        if video_ref is None:
-            raise ValueError("video_ref 不能为空，请先使用 generate_video_with_ref() 生成初始视频")
-
-        # 扩展视频配置（必须使用 720p）
-        config = self.types.GenerateVideosConfig(
-            number_of_videos=1,
-            resolution="720p"
-        )
-
-        # 调用扩展 API
-        operation = self.client.models.generate_videos(
-            model=self.VIDEO_MODEL,
-            video=video_ref,
-            prompt=prompt,
-            config=config
-        )
-
-        # 等待完成
-        elapsed = 0
-        while not operation.done:
-            if elapsed >= max_wait_time:
-                raise TimeoutError(f"视频扩展超时（{max_wait_time}秒）")
-            time.sleep(poll_interval)
-            elapsed += poll_interval
-            operation = self.client.operations.get(operation)
-            print(f"视频扩展中... 已等待 {elapsed} 秒")
-
-        # 检查结果
-        if not operation.response or not operation.response.generated_videos:
-            raise RuntimeError("视频扩展失败")
-
-        # 获取扩展后的视频和新引用
-        generated_video = operation.response.generated_videos[0]
-        new_video_ref = generated_video.video
-
-        if output_path:
-            output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # 下载视频文件
-            self.client.files.download(file=new_video_ref)
-            new_video_ref.save(str(output_path))
-
-            return output_path, new_video_ref, new_video_ref.uri
-
-        return None, new_video_ref, new_video_ref.uri
-
-    def restore_video_ref(self, video_uri: str):
-        """
-        从保存的 URI 恢复视频引用对象
-
-        Args:
-            video_uri: 之前保存的视频 URI（如 "https://generativelanguage.googleapis.com/..."）
-
-        Returns:
-            types.Video 对象，可用于 extend_video()
-
-        Note:
-            - 视频在服务器保存 2 天
-            - 每次 extend 会重置 2 天计时器
-            - 如果视频已过期，将抛出异常
-        """
-        if not video_uri:
-            raise ValueError("video_uri 不能为空")
-
-        return self.types.Video(uri=video_uri)
 
     def _prepare_image_param(
         self,
@@ -715,3 +657,42 @@ class GeminiClient:
             )
         else:
             return image
+
+    def _prepare_video_param(self, video):
+        """
+        统一处理 video 参数，支持多种输入类型
+
+        Args:
+            video: 视频输入，支持以下类型：
+                - None: 返回 (None, None)
+                - Video 对象: 直接使用
+                - URI 字符串 (gs:// 或 https://): 包装为 Video 对象
+                - 本地文件路径: 读取为 video_bytes
+
+        Returns:
+            (video_param, video_bytes) 元组
+            - video_param: 用于 API 调用的参数
+            - video_bytes: 视频二进制数据（Vertex AI 模式下载时使用）
+        """
+        if video is None:
+            return None, None
+
+        # Video 对象 - 直接使用
+        if hasattr(video, 'uri') or hasattr(video, 'video_bytes'):
+            video_bytes = getattr(video, 'video_bytes', None)
+            return video, video_bytes
+
+        # URI 字符串
+        if isinstance(video, str) and ('gs://' in video or '://' in video):
+            return self.types.Video(uri=video, mime_type="video/mp4"), None
+
+        # 本地文件路径
+        if isinstance(video, (str, Path)) and Path(video).exists():
+            with open(video, 'rb') as f:
+                video_bytes = f.read()
+            return self.types.Video(
+                video_bytes=video_bytes,
+                mime_type="video/mp4"
+            ), video_bytes
+
+        raise ValueError(f"无效的 video 参数: {video}")

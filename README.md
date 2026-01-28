@@ -190,11 +190,77 @@ Agent 会执行四步流程：
 
 ## ⚙️ 配置说明
 
+### API 后端选择
+
+项目支持两种 Gemini API 后端：
+
+#### 方式一：AI Studio（默认，推荐个人使用）
+
+```bash
+# 复制环境变量模板
+cp .env.example .env
+
+# 编辑 .env 文件
+GEMINI_BACKEND=aistudio
+GEMINI_API_KEY=your-api-key
+```
+
+从 https://aistudio.google.com/apikey 获取 API 密钥。
+
+#### 方式二：Vertex AI（推荐企业/高配额场景）
+
+**步骤 1：创建 GCP 项目和服务账号**
+
+1. 访问 [Google Cloud Console](https://console.cloud.google.com/)
+2. 创建新项目或选择现有项目
+3. 启用 **Vertex AI API**
+4. 创建服务账号并下载 JSON 密钥文件
+
+**步骤 2：配置凭证**
+
+```bash
+# 创建凭证目录
+mkdir -p vertex_keys
+
+# 将服务账号 JSON 文件放入目录
+cp your-service-account.json vertex_keys/
+```
+
+**步骤 3：创建 GCS Bucket（视频延长功能需要）**
+
+```bash
+# 使用 gcloud CLI 创建 bucket
+gcloud storage buckets create gs://your-bucket-name --location=us-central1
+
+# 授予服务账号写入权限
+gcloud storage buckets add-iam-policy-binding gs://your-bucket-name \
+    --member="serviceAccount:your-sa@your-project.iam.gserviceaccount.com" \
+    --role="roles/storage.objectAdmin"
+```
+
+**步骤 4：配置环境变量**
+
+```bash
+# 编辑 .env 文件
+GEMINI_BACKEND=vertex
+VERTEX_GCS_BUCKET=your-bucket-name
+```
+
+> **注意**：
+> - 服务账号需要 `Vertex AI User` 和 `Storage Object Admin` 权限
+> - GCS Bucket 用于视频延长功能的临时存储
+> - Vertex AI 目前仅支持 `us-central1` 区域
+
 ### 环境变量
 
 | 变量名 | 说明 | 必填 |
 |--------|------|------|
-| `GEMINI_API_KEY` | Gemini API 密钥 | ✅ |
+| `GEMINI_BACKEND` | API 后端：`aistudio`（默认）或 `vertex` | ❌ |
+| `GEMINI_API_KEY` | Gemini API 密钥（AI Studio 模式） | AI Studio ✅ |
+| `VERTEX_GCS_BUCKET` | GCS Bucket 名称（Vertex AI 视频延长需要） | Vertex AI ✅ |
+| `GEMINI_IMAGE_RPM` | 图片生成每分钟请求数限制（默认 15） | ❌ |
+| `GEMINI_VIDEO_RPM` | 视频生成每分钟请求数限制（默认 10） | ❌ |
+| `GEMINI_REQUEST_GAP` | 请求间隔秒数（默认 3.1） | ❌ |
 
 ### 支持的 API 模型
 
@@ -208,6 +274,13 @@ Agent 会执行四步流程：
 1. 检查 `.env` 文件中的 API 密钥是否正确
 2. 确认网络可以访问 Google API
 3. 检查 API 配额是否充足
+
+### Q: Vertex AI 延长视频失败？
+
+确保：
+1. 已设置 `VERTEX_GCS_BUCKET` 环境变量
+2. GCS Bucket 存在且服务账号有写入权限
+3. 服务账号 JSON 文件放在 `vertex_keys/` 目录下
 
 ### Q: 视频生成很慢？
 

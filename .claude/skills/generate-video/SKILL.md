@@ -258,7 +258,9 @@ background music, BGM, soundtrack, musical accompaniment
 
 ## API 使用
 
-### 标准生成（推荐）
+### 视频生成
+
+`generate_video()` 方法支持视频生成功能：
 
 ```python
 from lib.gemini_client import GeminiClient
@@ -273,8 +275,8 @@ video_aspect_ratio = get_aspect_ratio(project_data, 'video')
 # 说书模式: 4s, 剧集动画模式: 8s
 default_duration = 4 if content_mode == 'narration' else 8
 
-# 每个片段/场景独立生成
-video_path = client.generate_video(
+# 生成视频（返回三元组）
+path, video_ref, video_uri = client.generate_video(
     prompt=video_prompt,
     start_image="projects/{项目名}/storyboards/scene_E1S1.png",
     aspect_ratio=video_aspect_ratio,
@@ -283,11 +285,13 @@ video_path = client.generate_video(
 )
 ```
 
-### 延长单个场景（仅当需要超过 8 秒时）
+### 视频延长（仅当需要超过 8 秒时）
+
+使用 `generate_video()` 方法，通过 `video` 参数延长视频：
 
 ```python
 # 先生成初始视频
-path, video_ref, video_uri = client.generate_video_with_ref(
+path, video_ref, video_uri = client.generate_video(
     prompt=video_prompt,
     start_image="projects/{项目名}/storyboards/scene_E1S1.png",
     aspect_ratio="16:9",
@@ -295,13 +299,36 @@ path, video_ref, video_uri = client.generate_video_with_ref(
     output_path="projects/{项目名}/videos/scene_E1S1.mp4"
 )
 
-# 延长同一个场景（+7秒）
-path, video_ref, video_uri = client.extend_video(
-    video_ref=video_ref,
+# 延长同一个场景（+7秒）- 使用 video 参数
+path2, video_ref2, video_uri2 = client.generate_video(
     prompt="继续当前动作...",  # 延续同一场景的 prompt
-    output_path="projects/{项目名}/videos/scene_E1S1.mp4"
+    video=video_ref,  # 传入上一次返回的 video_ref
+    output_path="projects/{项目名}/videos/scene_E1S1_extended.mp4"
+)
+
+# 也可以使用本地视频文件延长
+path3, video_ref3, video_uri3 = client.generate_video(
+    prompt="继续当前动作...",
+    video="projects/{项目名}/videos/scene_E1S1.mp4",  # 本地文件路径
+    output_path="projects/{项目名}/videos/scene_E1S1_extended2.mp4"
+)
+
+# 或使用保存的 URI 恢复并延长（跨会话）
+path4, video_ref4, video_uri4 = client.generate_video(
+    prompt="继续当前动作...",
+    video=video_uri,  # 使用之前保存的 URI 字符串
+    output_path="projects/{项目名}/videos/scene_E1S1_extended3.mp4"
 )
 ```
+
+### video 参数支持的类型
+
+| 类型 | 示例 | 说明 |
+|------|------|------|
+| Video 对象 | `video_ref` | 来自上一次调用的返回值，直接使用 |
+| GCS URI | `gs://bucket/video.mp4` | 包装为 Video 对象 |
+| API URI | `https://...` | 包装为 Video 对象 |
+| 本地文件 | `./output.mp4` | 读取文件内容 |
 
 ## 生成前检查
 
