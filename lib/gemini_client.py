@@ -174,6 +174,9 @@ except ImportError:
 class GeminiClient:
     """Gemini API 客户端封装"""
 
+    # 跳过名称推断的文件名模式
+    SKIP_NAME_PATTERNS = ('grid_', 'scene_', 'storyboard_', 'output_')
+
     def __init__(self, api_key: Optional[str] = None, rate_limiter: Optional[RateLimiter] = None):
         """
         初始化 Gemini 客户端
@@ -261,6 +264,82 @@ class GeminiClient:
         self.IMAGE_MODEL = "gemini-3-pro-image-preview"
         self.VIDEO_MODEL = "veo-3.1-generate-preview"
 
+    def _extract_name_from_path(self, image: Union[str, Path, Image.Image]) -> Optional[str]:
+        """
+        从图片路径推断名称
+
+        Args:
+            image: 图片路径或 PIL Image 对象
+
+        Returns:
+            推断出的名称，或 None（无法推断时）
+
+        Examples:
+            characters/姜月茴.png → "姜月茴"
+            clues/玉佩.png → "玉佩"
+            storyboards/grid_001.png → None (跳过)
+            PIL.Image.Image → None (跳过)
+        """
+        # PIL Image 对象无法推断
+        if isinstance(image, Image.Image):
+            return None
+
+        path = Path(image)
+        filename = path.stem  # 不含扩展名的文件名
+
+        # 跳过通用文件名模式
+        for pattern in self.SKIP_NAME_PATTERNS:
+            if filename.startswith(pattern):
+                return None
+
+        return filename
+
+    def _build_contents_with_labeled_refs(
+        self,
+        prompt: str,
+        reference_images: Optional[List[Union[str, Path, Image.Image]]] = None
+    ) -> List:
+        """
+        构建带名称标签的 contents 列表
+
+        格式：[名称1, 图片1, 名称2, 图片2, ..., prompt]
+        - 每张参考图片前添加名称标签（如果能推断）
+        - prompt 放在最后
+
+        Args:
+            prompt: 图片生成提示词
+            reference_images: 参考图片列表
+
+        Returns:
+            构建好的 contents 列表
+        """
+        contents = []
+
+        # 添加带标签的参考图片
+        if reference_images:
+            labeled_refs = []
+            for img in reference_images:
+                name = self._extract_name_from_path(img)
+                if name:
+                    labeled_refs.append(name)
+                    contents.append(name)
+
+                # 加载图片
+                if isinstance(img, (str, Path)):
+                    loaded_img = Image.open(img)
+                else:
+                    loaded_img = img
+                contents.append(loaded_img)
+
+            # 打印日志
+            if labeled_refs:
+                print(f"📝 参考图片标签: {', '.join(labeled_refs)}")
+
+        # prompt 放最后
+        contents.append(prompt)
+
+        return contents
+
     @with_retry(max_attempts=5, backoff_seconds=(2, 4, 8, 16, 32))
     def generate_image(
         self,
@@ -285,15 +364,8 @@ class GeminiClient:
         if self.rate_limiter:
             self.rate_limiter.acquire(self.IMAGE_MODEL)
 
-        # 构建请求内容
-        contents = [prompt]
-
-        # 添加参考图片
-        if reference_images:
-            for img in reference_images:
-                if isinstance(img, (str, Path)):
-                    img = Image.open(img)
-                contents.append(img)
+        # 构建带名称标签的 contents（参考图在前，prompt 在后）
+        contents = self._build_contents_with_labeled_refs(prompt, reference_images)
 
         # 调用 API
         response = self.client.models.generate_content(
@@ -348,13 +420,8 @@ class GeminiClient:
                 model=self.IMAGE_MODEL
             )
 
-        # 构建消息内容
-        message_content = [prompt]
-        if reference_images:
-            for img in reference_images:
-                if isinstance(img, (str, Path)):
-                    img = Image.open(img)
-                message_content.append(img)
+        # 构建带名称标签的消息内容（参考图在前，prompt 在后）
+        message_content = self._build_contents_with_labeled_refs(prompt, reference_images)
 
         # 发送消息
         response = chat_session.send_message(message_content)
