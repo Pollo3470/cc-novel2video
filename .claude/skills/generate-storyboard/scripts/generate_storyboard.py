@@ -337,7 +337,7 @@ def build_direct_scene_prompt(
     if not image_prompt:
         raise ValueError(f"片段 {segment[id_field]} 缺少 image_prompt 字段")
 
-    return image_prompt
+    return f"{image_prompt} 竖屏构图。"
 
 
 def generate_individual_scenes(

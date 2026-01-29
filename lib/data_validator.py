@@ -314,14 +314,11 @@ class DataValidator:
                 if invalid:
                     errors.append(f"{prefix}: clues_in_segment 引用了不在 clues_in_episode 中的线索: {invalid}")
 
-            # visual
-            visual = segment.get('visual', {})
-            if not visual.get('description'):
-                errors.append(f"{prefix}: 缺少必填字段 visual.description")
-            if not visual.get('shot_type'):
-                errors.append(f"{prefix}: 缺少必填字段 visual.shot_type")
-            if not visual.get('camera_movement'):
-                errors.append(f"{prefix}: 缺少必填字段 visual.camera_movement")
+            # image_prompt 和 video_prompt（新格式，符合 CLAUDE.md 规范）
+            if not segment.get('image_prompt'):
+                errors.append(f"{prefix}: 缺少必填字段 image_prompt")
+            if not segment.get('video_prompt'):
+                errors.append(f"{prefix}: 缺少必填字段 video_prompt")
 
     def _validate_scenes(
         self,
@@ -382,14 +379,11 @@ class DataValidator:
                 if invalid:
                     errors.append(f"{prefix}: clues_in_scene 引用了不在 clues_in_episode 中的线索: {invalid}")
 
-            # visual
-            visual = scene.get('visual', {})
-            if not visual.get('description'):
-                errors.append(f"{prefix}: 缺少必填字段 visual.description")
-            if not visual.get('shot_type'):
-                errors.append(f"{prefix}: 缺少必填字段 visual.shot_type")
-            if not visual.get('camera_movement'):
-                errors.append(f"{prefix}: 缺少必填字段 visual.camera_movement")
+            # image_prompt 和 video_prompt（新格式，符合 CLAUDE.md 规范）
+            if not scene.get('image_prompt'):
+                errors.append(f"{prefix}: 缺少必填字段 image_prompt")
+            if not scene.get('video_prompt'):
+                errors.append(f"{prefix}: 缺少必填字段 video_prompt")
 
 
 # 便捷函数

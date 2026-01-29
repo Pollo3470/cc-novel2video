@@ -1405,68 +1405,28 @@ class ProjectManager:
         Returns:
             生成的 overview 字典，包含 synopsis, genre, theme, world_setting, generated_at
         """
-        from google import genai
-        from google.oauth2 import service_account
+        from .gemini_client import GeminiClient
 
         # 读取源文件内容
         source_content = self._read_source_files(project_name)
         if not source_content:
             raise ValueError("source 目录为空，无法生成概述")
 
-        # 初始化 Gemini 客户端
-        backend = os.environ.get('GEMINI_BACKEND', 'aistudio').lower()
-        if backend == 'vertex':
-            # Vertex AI 模式（使用 JSON 服务账号凭证）
-            credentials_dir = Path(__file__).parent.parent / 'vertex_keys'
-            credentials_files = list(credentials_dir.glob('*.json')) if credentials_dir.exists() else []
+        # 复用 GeminiClient（自动处理后端切换和 OAuth scopes）
+        client = GeminiClient()
 
-            if not credentials_files:
-                raise ValueError(
-                    "未找到 Vertex AI 凭证文件\n"
-                    "请将服务账号 JSON 文件放入 vertex_keys/ 目录"
-                )
-
-            credentials_file = credentials_files[0]
-
-            # 从凭证文件读取项目 ID
-            with open(credentials_file) as f:
-                creds_data = json.load(f)
-            project_id = creds_data.get('project_id')
-
-            if not project_id:
-                raise ValueError(f"凭证文件 {credentials_file} 中未找到 project_id")
-
-            # 加载服务账号凭证
-            credentials = service_account.Credentials.from_service_account_file(
-                str(credentials_file)
-            )
-
-            client = genai.Client(
-                vertexai=True,
-                project=project_id,
-                location="us-central1",
-                credentials=credentials,
-            )
-        else:
-            api_key = os.environ.get('GEMINI_API_KEY')
-            if not api_key:
-                raise ValueError("GEMINI_API_KEY 环境变量未设置")
-            client = genai.Client(api_key=api_key)
-
-        # 调用 Gemini API（Structured Outputs）- 使用异步方法
+        # 调用 Gemini API（Structured Outputs）
         prompt = f"请分析以下小说内容，提取关键信息：\n\n{source_content}"
 
-        response = await client.aio.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json",
-                "response_json_schema": ProjectOverview.model_json_schema(),
-            },
+        # 使用原生异步 API
+        response_text = await client.generate_text_async(
+            prompt=prompt,
+            model="gemini-2.0-flash",
+            response_schema=ProjectOverview.model_json_schema(),
         )
 
         # 解析并验证响应
-        overview = ProjectOverview.model_validate_json(response.text)
+        overview = ProjectOverview.model_validate_json(response_text)
         overview_dict = overview.model_dump()
         overview_dict["generated_at"] = datetime.now().isoformat()
 
