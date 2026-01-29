@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from lib.gemini_client import GeminiClient
+from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
 
 
@@ -75,21 +75,20 @@ def generate_character(
     # 构建 prompt
     prompt = build_character_prompt(character_name, description, style)
 
-    # 生成图片
-    client = GeminiClient()
-    output_path = project_dir / 'characters' / f"{character_name}.png"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # 生成图片（带自动版本管理）
+    generator = MediaGenerator(project_dir)
 
     print(f"🎨 正在生成人物设计图: {character_name}")
     print(f"   描述: {description[:50]}...")
 
-    client.generate_image(
+    output_path, version = generator.generate_image(
         prompt=prompt,
-        aspect_ratio="16:9",
-        output_path=output_path
+        resource_type="characters",
+        resource_id=character_name,
+        aspect_ratio="16:9"
     )
 
-    print(f"✅ 人物设计图已保存: {output_path}")
+    print(f"✅ 人物设计图已保存: {output_path} (版本 v{version})")
 
     # 更新 project.json 中的 character_sheet 路径
     relative_path = f"characters/{character_name}.png"

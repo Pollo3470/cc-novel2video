@@ -249,7 +249,7 @@ VERTEX_GCS_BUCKET=your-bucket-name
 > **注意**：
 > - 服务账号需要 `Vertex AI User` 和 `Storage Object Admin` 权限
 > - GCS Bucket 用于视频延长功能的临时存储
-> - Vertex AI 目前仅支持 `us-central1` 区域
+> - Vertex AI 目前使用 `global` 区域
 
 ### 环境变量
 

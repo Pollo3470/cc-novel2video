@@ -31,7 +31,8 @@ from typing import List, Tuple, Optional, Callable, TypeVar, Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from lib.gemini_client import GeminiClient
+from lib.gemini_client import GeminiClient, RateLimiter
+from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
 
 
@@ -409,10 +410,9 @@ def generate_individual_scenes(
     def generate_single_scene(task_data: Tuple[int, dict]) -> Path:
         idx, scene = task_data
         scene_id = scene[id_field]
-        output_path = project_dir / 'storyboards' / f"scene_{scene_id}.png"
 
-        # 每个线程创建独立的 client，共享 rate_limiter
-        client = GeminiClient(rate_limiter=rate_limiter)
+        # 每个线程创建独立的 generator，共享 rate_limiter
+        generator = MediaGenerator(project_dir, rate_limiter=rate_limiter)
 
         # 收集参考图：多宫格图 + 该场景的人物设计图 + 线索设计图
         reference_images = [grid_image_path]
@@ -438,12 +438,13 @@ def generate_individual_scenes(
         # 构建 prompt（包含宫格位置信息、线索信息和项目风格）
         prompt = build_scene_prompt(scene, characters, idx, total_in_grid, clues, style, id_field, char_field, clue_field)
 
-        # 调用 API（使用动态画面比例）
-        client.generate_image(
+        # 调用 MediaGenerator（带自动版本管理）
+        output_path, _ = generator.generate_image(
             prompt=prompt,
+            resource_type="storyboards",
+            resource_id=scene_id,
             reference_images=reference_images,
-            aspect_ratio=storyboard_aspect_ratio,
-            output_path=output_path
+            aspect_ratio=storyboard_aspect_ratio
         )
 
         # 更新剧本（线程安全）
@@ -897,10 +898,9 @@ def generate_storyboard_direct(
 
     def generate_single(segment: dict) -> Path:
         segment_id = segment[id_field]
-        output_path = project_dir / 'storyboards' / f"scene_{segment_id}.png"
 
-        # 每个线程创建独立的 client，共享 rate_limiter
-        client = GeminiClient(rate_limiter=rate_limiter)
+        # 每个线程创建独立的 generator，共享 rate_limiter
+        generator = MediaGenerator(project_dir, rate_limiter=rate_limiter)
 
         # 收集参考图：仅 character_sheet 和 clue_sheet
         reference_images = []
@@ -927,11 +927,13 @@ def generate_storyboard_direct(
             id_field, char_field, clue_field
         )
 
-        client.generate_image(
+        # 调用 MediaGenerator（带自动版本管理）
+        output_path, _ = generator.generate_image(
             prompt=prompt,
+            resource_type="storyboards",
+            resource_id=segment_id,
             reference_images=reference_images if reference_images else None,
-            aspect_ratio=storyboard_aspect_ratio,
-            output_path=output_path
+            aspect_ratio=storyboard_aspect_ratio
         )
 
         # 更新剧本

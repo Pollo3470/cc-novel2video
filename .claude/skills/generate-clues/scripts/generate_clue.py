@@ -16,7 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from lib.gemini_client import GeminiClient
+from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
 
 
@@ -105,29 +105,26 @@ def generate_clue(
     else:
         prompt = build_prop_prompt(clue_name, description, style)
 
-    # 生成图片
-    client = GeminiClient()
-    output_path = project_dir / 'clues' / f"{clue_name}.png"
-
-    # 确保目录存在
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    # 生成图片（带自动版本管理）
+    generator = MediaGenerator(project_dir)
 
     print(f"🎨 正在生成线索设计图: {clue_name}")
     print(f"   类型: {clue_type}")
     print(f"   描述: {description[:50]}..." if len(description) > 50 else f"   描述: {description}")
 
-    image = client.generate_image(
+    output_path, version = generator.generate_image(
         prompt=prompt,
-        aspect_ratio="16:9",
-        output_path=output_path
+        resource_type="clues",
+        resource_id=clue_name,
+        aspect_ratio="16:9"
     )
 
-    print(f"✅ 线索设计图已保存: {output_path}")
+    print(f"✅ 线索设计图已保存: {output_path} (版本 v{version})")
 
     # 更新 project.json 中的 clue_sheet 路径
     relative_path = f"clues/{clue_name}.png"
     pm.update_clue_sheet(project_name, clue_name, relative_path)
-    print(f"✅ 项目元数据已更新")
+    print("✅ 项目元数据已更新")
 
     return output_path
 

@@ -270,6 +270,88 @@ class API {
             body: JSON.stringify(updates),
         });
     }
+
+    // ==================== 生成 API ====================
+
+    /**
+     * 生成分镜图
+     * @param {string} projectName - 项目名称
+     * @param {string} segmentId - 片段/场景 ID
+     * @param {string} prompt - 图片生成 prompt
+     * @param {string} scriptFile - 剧本文件名
+     */
+    static async generateStoryboard(projectName, segmentId, prompt, scriptFile) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/generate/storyboard/${encodeURIComponent(segmentId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ prompt, script_file: scriptFile }),
+        });
+    }
+
+    /**
+     * 生成视频
+     * @param {string} projectName - 项目名称
+     * @param {string} segmentId - 片段/场景 ID
+     * @param {string} prompt - 视频生成 prompt
+     * @param {string} scriptFile - 剧本文件名
+     * @param {number} durationSeconds - 时长（秒）
+     */
+    static async generateVideo(projectName, segmentId, prompt, scriptFile, durationSeconds = 4) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/generate/video/${encodeURIComponent(segmentId)}`, {
+            method: 'POST',
+            body: JSON.stringify({ prompt, script_file: scriptFile, duration_seconds: durationSeconds }),
+        });
+    }
+
+    /**
+     * 生成人物设计图
+     * @param {string} projectName - 项目名称
+     * @param {string} charName - 人物名称
+     * @param {string} prompt - 人物描述 prompt
+     */
+    static async generateCharacter(projectName, charName, prompt) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/generate/character/${encodeURIComponent(charName)}`, {
+            method: 'POST',
+            body: JSON.stringify({ prompt }),
+        });
+    }
+
+    /**
+     * 生成线索设计图
+     * @param {string} projectName - 项目名称
+     * @param {string} clueName - 线索名称
+     * @param {string} prompt - 线索描述 prompt
+     */
+    static async generateClue(projectName, clueName, prompt) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/generate/clue/${encodeURIComponent(clueName)}`, {
+            method: 'POST',
+            body: JSON.stringify({ prompt }),
+        });
+    }
+
+    // ==================== 版本管理 API ====================
+
+    /**
+     * 获取资源版本列表
+     * @param {string} projectName - 项目名称
+     * @param {string} resourceType - 资源类型 (storyboards, videos, characters, clues)
+     * @param {string} resourceId - 资源 ID
+     */
+    static async getVersions(projectName, resourceType, resourceId) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/versions/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`);
+    }
+
+    /**
+     * 还原到指定版本
+     * @param {string} projectName - 项目名称
+     * @param {string} resourceType - 资源类型
+     * @param {string} resourceId - 资源 ID
+     * @param {number} version - 要还原的版本号
+     */
+    static async restoreVersion(projectName, resourceType, resourceId, version) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/versions/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}/restore/${version}`, {
+            method: 'POST',
+        });
+    }
 }
 
 // 导出

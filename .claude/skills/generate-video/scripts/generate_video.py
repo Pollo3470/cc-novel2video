@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Optional
 
 from lib.gemini_client import GeminiClient
+from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
 
 
@@ -251,7 +252,7 @@ def generate_episode_video(
     """
     pm = ProjectManager()
     project_dir = pm.get_project_path(project_name)
-    client = GeminiClient()
+    generator = MediaGenerator(project_dir)
 
     # 加载剧本和项目配置
     script = pm.load_script(project_name, script_filename)
@@ -339,12 +340,13 @@ def generate_episode_video(
 
         try:
             print(f"    🎥 生成视频（{duration_str}秒）...")
-            output_path_result, _, _ = client.generate_video(
+            video_output, _, _, _ = generator.generate_video(
                 prompt=prompt,
+                resource_type="videos",
+                resource_id=item_id,
                 start_image=storyboard_path,
                 aspect_ratio=video_aspect_ratio,
-                duration_seconds=duration_str,
-                output_path=video_output
+                duration_seconds=duration_str
             )
 
             scene_videos.append(video_output)
@@ -453,20 +455,20 @@ def generate_scene_video(
     duration = item.get('duration_seconds', default_duration)
     duration_str = validate_duration(duration)
 
-    # 生成视频
-    client = GeminiClient()
-    output_path = project_dir / 'videos' / f"scene_{scene_id}.mp4"
+    # 生成视频（带自动版本管理）
+    generator = MediaGenerator(project_dir)
 
     print(f"🎬 正在生成视频: 场景/片段 {scene_id}")
     print(f"   画面比例: {video_aspect_ratio}")
-    print(f"   预计等待时间: 1-6 分钟")
+    print("   预计等待时间: 1-6 分钟")
 
-    output_path_result, _, _ = client.generate_video(
+    output_path, _, _, _ = generator.generate_video(
         prompt=prompt,
+        resource_type="videos",
+        resource_id=scene_id,
         start_image=storyboard_path,
         aspect_ratio=video_aspect_ratio,
-        duration_seconds=duration_str,
-        output_path=output_path
+        duration_seconds=duration_str
     )
 
     print(f"✅ 视频已保存: {output_path}")

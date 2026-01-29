@@ -283,7 +283,21 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-1">人物设计图</label>
-                    <div id="char-image-drop" class="drop-zone rounded-lg p-6 text-center cursor-pointer">
+                    <!-- 版本选择器和生成按钮 -->
+                    <div class="flex items-center space-x-2 mb-2">
+                        <select id="char-image-version" class="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white">
+                            <option value="">无版本</option>
+                        </select>
+                        <button type="button" id="char-generate-btn"
+                            class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center space-x-1">
+                            <span>生成</span>
+                        </button>
+                        <button type="button" id="char-restore-btn"
+                            class="hidden px-3 py-1 text-sm bg-yellow-600 hover:bg-yellow-700 rounded transition-colors">
+                            还原
+                        </button>
+                    </div>
+                    <div id="char-image-drop" class="drop-zone rounded-lg p-6 text-center cursor-pointer relative">
                         <div id="char-image-preview" class="hidden mb-4">
                             <img src="" alt="预览" class="max-h-48 mx-auto rounded">
                         </div>
@@ -292,7 +306,15 @@
                         </svg>
                         <p class="mt-2 text-sm text-gray-400">点击或拖拽上传图片</p>
                         <input type="file" id="char-image-input" accept="image/*" class="hidden">
+                        <!-- Loading overlay -->
+                        <div id="char-image-loading" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
+                            <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </div>
                     </div>
+                    <p id="char-image-version-prompt" class="text-xs text-gray-500 mt-1 line-clamp-2 hidden"></p>
                 </div>
                 <div class="flex justify-end space-x-3 pt-4">
                     <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
@@ -340,7 +362,21 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-1">线索设计图</label>
-                    <div id="clue-image-drop" class="drop-zone rounded-lg p-6 text-center cursor-pointer">
+                    <!-- 版本选择器和生成按钮 -->
+                    <div class="flex items-center space-x-2 mb-2">
+                        <select id="clue-image-version" class="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white">
+                            <option value="">无版本</option>
+                        </select>
+                        <button type="button" id="clue-generate-btn"
+                            class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center space-x-1">
+                            <span>生成</span>
+                        </button>
+                        <button type="button" id="clue-restore-btn"
+                            class="hidden px-3 py-1 text-sm bg-yellow-600 hover:bg-yellow-700 rounded transition-colors">
+                            还原
+                        </button>
+                    </div>
+                    <div id="clue-image-drop" class="drop-zone rounded-lg p-6 text-center cursor-pointer relative">
                         <div id="clue-image-preview" class="hidden mb-4">
                             <img src="" alt="预览" class="max-h-48 mx-auto rounded">
                         </div>
@@ -349,7 +385,15 @@
                         </svg>
                         <p class="mt-2 text-sm text-gray-400">点击或拖拽上传图片</p>
                         <input type="file" id="clue-image-input" accept="image/*" class="hidden">
+                        <!-- Loading overlay -->
+                        <div id="clue-image-loading" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
+                            <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </div>
                     </div>
+                    <p id="clue-image-version-prompt" class="text-xs text-gray-500 mt-1 line-clamp-2 hidden"></p>
                 </div>
                 <div class="flex justify-end space-x-3 pt-4">
                     <button type="button" class="close-modal px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">取消</button>
@@ -378,15 +422,63 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">分镜图</label>
-                            <div id="scene-storyboard" class="aspect-video bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
-                                <span class="text-gray-500">暂无分镜图</span>
+                            <!-- 版本选择器和生成按钮 -->
+                            <div class="flex items-center space-x-2 mb-2">
+                                <select id="scene-storyboard-version" class="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white">
+                                    <option value="">无版本</option>
+                                </select>
+                                <button type="button" id="scene-generate-storyboard-btn"
+                                    class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center space-x-1">
+                                    <span>生成</span>
+                                </button>
+                                <button type="button" id="scene-restore-storyboard-btn"
+                                    class="hidden px-3 py-1 text-sm bg-yellow-600 hover:bg-yellow-700 rounded transition-colors">
+                                    还原
+                                </button>
                             </div>
+                            <div class="relative">
+                                <div id="scene-storyboard" class="aspect-video bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                    <span class="text-gray-500">暂无分镜图</span>
+                                </div>
+                                <!-- Loading overlay - 放在容器外部避免被 innerHTML 覆盖 -->
+                                <div id="scene-storyboard-loading" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg z-10">
+                                    <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p id="scene-storyboard-version-prompt" class="text-xs text-gray-500 mt-1 line-clamp-2 hidden"></p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">视频预览</label>
-                            <div id="scene-video" class="aspect-video bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
-                                <span class="text-gray-500">暂无视频</span>
+                            <!-- 版本选择器和生成按钮 -->
+                            <div class="flex items-center space-x-2 mb-2">
+                                <select id="scene-video-version" class="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white">
+                                    <option value="">无版本</option>
+                                </select>
+                                <button type="button" id="scene-generate-video-btn"
+                                    class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center space-x-1">
+                                    <span>生成</span>
+                                </button>
+                                <button type="button" id="scene-restore-video-btn"
+                                    class="hidden px-3 py-1 text-sm bg-yellow-600 hover:bg-yellow-700 rounded transition-colors">
+                                    还原
+                                </button>
                             </div>
+                            <div class="relative">
+                                <div id="scene-video" class="aspect-video bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                    <span class="text-gray-500">暂无视频</span>
+                                </div>
+                                <!-- Loading overlay - 放在容器外部避免被 innerHTML 覆盖 -->
+                                <div id="scene-video-loading" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg z-10">
+                                    <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p id="scene-video-version-prompt" class="text-xs text-gray-500 mt-1 line-clamp-2 hidden"></p>
                         </div>
                     </div>
                     <!-- 右侧：表单 -->
@@ -523,16 +615,64 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">分镜图预览</label>
-                            <div id="segment-storyboard" class="aspect-portrait bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center max-w-[240px]">
-                                <span class="text-gray-500">暂无分镜图</span>
+                            <!-- 版本选择器和生成按钮 -->
+                            <div class="flex items-center space-x-2 mb-2">
+                                <select id="segment-storyboard-version" class="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white">
+                                    <option value="">无版本</option>
+                                </select>
+                                <button type="button" id="segment-generate-storyboard-btn"
+                                    class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center space-x-1">
+                                    <span>生成</span>
+                                </button>
+                                <button type="button" id="segment-restore-storyboard-btn"
+                                    class="hidden px-3 py-1 text-sm bg-yellow-600 hover:bg-yellow-700 rounded transition-colors">
+                                    还原
+                                </button>
                             </div>
+                            <div class="relative max-w-[240px]">
+                                <div id="segment-storyboard" class="aspect-portrait bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                    <span class="text-gray-500">暂无分镜图</span>
+                                </div>
+                                <!-- Loading overlay - 放在容器外部避免被 innerHTML 覆盖 -->
+                                <div id="segment-storyboard-loading" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg z-10">
+                                    <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p id="segment-storyboard-version-prompt" class="text-xs text-gray-500 mt-1 line-clamp-2 hidden"></p>
                         </div>
                         <!-- 视频预览 -->
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">视频预览</label>
-                            <div id="segment-video" class="aspect-portrait bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center max-w-[240px]">
-                                <span class="text-gray-500">暂无视频</span>
+                            <!-- 版本选择器和生成按钮 -->
+                            <div class="flex items-center space-x-2 mb-2">
+                                <select id="segment-video-version" class="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white">
+                                    <option value="">无版本</option>
+                                </select>
+                                <button type="button" id="segment-generate-video-btn"
+                                    class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center space-x-1">
+                                    <span>生成</span>
+                                </button>
+                                <button type="button" id="segment-restore-video-btn"
+                                    class="hidden px-3 py-1 text-sm bg-yellow-600 hover:bg-yellow-700 rounded transition-colors">
+                                    还原
+                                </button>
                             </div>
+                            <div class="relative max-w-[240px]">
+                                <div id="segment-video" class="aspect-portrait bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center">
+                                    <span class="text-gray-500">暂无视频</span>
+                                </div>
+                                <!-- Loading overlay - 放在容器外部避免被 innerHTML 覆盖 -->
+                                <div id="segment-video-loading" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg z-10">
+                                    <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p id="segment-video-version-prompt" class="text-xs text-gray-500 mt-1 line-clamp-2 hidden"></p>
                         </div>
                         <!-- 小说原文（只读） -->
                         <div>

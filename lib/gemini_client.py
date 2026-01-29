@@ -352,7 +352,7 @@ class GeminiClient:
             self.client = genai.Client(
                 vertexai=True,
                 project=self.project_id,
-                location="us-central1",
+                location="global",
                 credentials=self.credentials,
             )
             print(f"✓ 使用 Vertex AI 后端（凭证: {credentials_file.name}）")
