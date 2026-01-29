@@ -973,6 +973,14 @@ function editSegment(segmentId, scriptFile) {
         storyboardContainer.innerHTML = '<span class="text-gray-500">暂无分镜图</span>';
     }
 
+    // 显示视频预览
+    const videoContainer = document.getElementById('segment-video');
+    if (assets.video_clip) {
+        videoContainer.innerHTML = `<video src="${API.getFileUrl(projectName, assets.video_clip)}?t=${cacheBuster}" controls class="w-full h-full"></video>`;
+    } else {
+        videoContainer.innerHTML = '<span class="text-gray-500">暂无视频</span>';
+    }
+
     modal.classList.remove('hidden');
 }
 
