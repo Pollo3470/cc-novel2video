@@ -77,11 +77,3 @@ image = client.generate_image(
     output_path=f"projects/{项目名}/characters/{人物名}.png"
 )
 ```
-
-## 质量检查清单
-
-批准人物设计前检查：
-- [ ] 三个视角中面部清晰一致
-- [ ] 服装符合描述
-- [ ] 颜色鲜明易识别
-- [ ] 整体风格适合故事类型
