@@ -448,12 +448,13 @@ class GeminiClient:
 
         return contents
 
-    def _prepare_image_config(self, aspect_ratio: str):
+    def _prepare_image_config(self, aspect_ratio: str, image_size: str = "2K"):
         """构建图片生成配置"""
         return self.types.GenerateContentConfig(
-            response_modalities=['TEXT', 'IMAGE'],
+            response_modalities=['IMAGE'],
             image_config=self.types.ImageConfig(
-                aspect_ratio=aspect_ratio
+                aspect_ratio=aspect_ratio,
+                image_size=image_size
             )
         )
 
@@ -479,6 +480,7 @@ class GeminiClient:
         prompt: str,
         reference_images: Optional[List[Union[str, Path, Image.Image]]] = None,
         aspect_ratio: str = "9:16",
+        image_size: str = "2K",
         output_path: Optional[Union[str, Path]] = None
     ) -> Image.Image:
         """
@@ -488,6 +490,7 @@ class GeminiClient:
             prompt: 图片生成提示词
             reference_images: 参考图片列表（用于人物一致性）
             aspect_ratio: 宽高比，默认 9:16（竖屏）
+            image_size: 图片尺寸，默认 2K
             output_path: 可选的输出路径
 
         Returns:
@@ -499,7 +502,7 @@ class GeminiClient:
 
         # 构建带名称标签的 contents（参考图在前，prompt 在后）
         contents = self._build_contents_with_labeled_refs(prompt, reference_images)
-        config = self._prepare_image_config(aspect_ratio)
+        config = self._prepare_image_config(aspect_ratio, image_size)
 
         # 调用 API
         response = self.client.models.generate_content(
@@ -516,6 +519,7 @@ class GeminiClient:
         prompt: str,
         reference_images: Optional[List[Union[str, Path, Image.Image]]] = None,
         aspect_ratio: str = "9:16",
+        image_size: str = "2K",
         output_path: Optional[Union[str, Path]] = None
     ) -> Image.Image:
         """
@@ -527,6 +531,7 @@ class GeminiClient:
             prompt: 图片生成提示词
             reference_images: 参考图片列表（用于人物一致性）
             aspect_ratio: 宽高比，默认 9:16（竖屏）
+            image_size: 图片尺寸，默认 2K
             output_path: 可选的输出路径
 
         Returns:
@@ -538,7 +543,7 @@ class GeminiClient:
 
         # 构建带名称标签的 contents（参考图在前，prompt 在后）
         contents = self._build_contents_with_labeled_refs(prompt, reference_images)
-        config = self._prepare_image_config(aspect_ratio)
+        config = self._prepare_image_config(aspect_ratio, image_size)
 
         # 调用异步 API
         response = await self.client.aio.models.generate_content(

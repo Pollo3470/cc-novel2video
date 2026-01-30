@@ -79,6 +79,7 @@ class MediaGenerator:
         resource_id: str,
         reference_images: Optional[List[Union[str, Path, Image.Image]]] = None,
         aspect_ratio: str = "9:16",
+        image_size: str = "2K",
         **version_metadata
     ) -> Tuple[Path, int]:
         """
@@ -97,6 +98,7 @@ class MediaGenerator:
             resource_id: 资源 ID (E1S01, 姜月茴, 玉佩)
             reference_images: 参考图片列表（用于人物一致性）
             aspect_ratio: 宽高比，默认 9:16（竖屏）
+            image_size: 图片尺寸，默认 2K
             **version_metadata: 额外元数据（如 aspect_ratio）
 
         Returns:
@@ -121,6 +123,7 @@ class MediaGenerator:
             prompt=prompt,
             reference_images=reference_images,
             aspect_ratio=aspect_ratio,
+            image_size=image_size,
             output_path=output_path
         )
 
@@ -143,6 +146,7 @@ class MediaGenerator:
         resource_id: str,
         reference_images: Optional[List[Union[str, Path, Image.Image]]] = None,
         aspect_ratio: str = "9:16",
+        image_size: str = "2K",
         **version_metadata
     ) -> Tuple[Path, int]:
         """
@@ -154,6 +158,7 @@ class MediaGenerator:
             resource_id: 资源 ID (E1S01, 姜月茴, 玉佩)
             reference_images: 参考图片列表（用于人物一致性）
             aspect_ratio: 宽高比，默认 9:16（竖屏）
+            image_size: 图片尺寸，默认 2K
             **version_metadata: 额外元数据
 
         Returns:
@@ -178,6 +183,7 @@ class MediaGenerator:
             prompt=prompt,
             reference_images=reference_images,
             aspect_ratio=aspect_ratio,
+            image_size=image_size,
             output_path=output_path
         )
 
@@ -201,7 +207,7 @@ class MediaGenerator:
         start_image: Optional[Union[str, Path, Image.Image]] = None,
         aspect_ratio: str = "9:16",
         duration_seconds: str = "8",
-        resolution: str = "720p",
+        resolution: str = "1080p",
         negative_prompt: str = "background music, BGM, soundtrack, musical accompaniment",
         **version_metadata
     ) -> Tuple[Path, int, any, Optional[str]]:
@@ -215,7 +221,7 @@ class MediaGenerator:
             start_image: 起始帧图片（image-to-video 模式）
             aspect_ratio: 宽高比，默认 9:16（竖屏）
             duration_seconds: 视频时长，可选 "4", "6", "8"
-            resolution: 分辨率，默认 "720p"
+            resolution: 分辨率，默认 "1080p"
             negative_prompt: 负面提示词
             **version_metadata: 额外元数据（如 duration_seconds）
 
@@ -267,7 +273,7 @@ class MediaGenerator:
         start_image: Optional[Union[str, Path, Image.Image]] = None,
         aspect_ratio: str = "9:16",
         duration_seconds: str = "8",
-        resolution: str = "720p",
+        resolution: str = "1080p",
         negative_prompt: str = "background music, BGM, soundtrack, musical accompaniment",
         **version_metadata
     ) -> Tuple[Path, int, any, Optional[str]]:
@@ -281,7 +287,7 @@ class MediaGenerator:
             start_image: 起始帧图片（image-to-video 模式）
             aspect_ratio: 宽高比，默认 9:16（竖屏）
             duration_seconds: 视频时长，可选 "4", "6", "8"
-            resolution: 分辨率，默认 "720p"
+            resolution: 分辨率，默认 "1080p"
             negative_prompt: 负面提示词
             **version_metadata: 额外元数据
 

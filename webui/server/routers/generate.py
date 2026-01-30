@@ -52,8 +52,10 @@ def get_aspect_ratio(project: dict, resource_type: str) -> str:
         return custom_ratios[resource_type]
 
     # 默认比例
-    if resource_type in ("characters", "clues"):
-        return "16:9"  # 设计图始终 16:9
+    if resource_type == "characters":
+        return "3:4"  # 人物设计图使用 3:4 竖版
+    elif resource_type == "clues":
+        return "16:9"  # 线索设计图保持 16:9
     elif content_mode == "narration":
         return "9:16"  # 说书模式竖屏
     else:
@@ -161,7 +163,8 @@ async def generate_storyboard(
             resource_type="storyboards",
             resource_id=segment_id,
             reference_images=reference_images if reference_images else None,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            image_size="2K"
         )
 
         # 更新剧本中的 generated_assets
@@ -280,24 +283,31 @@ async def generate_character(
         if char_name not in project.get("characters", {}):
             raise HTTPException(status_code=404, detail=f"人物 '{char_name}' 不存在")
 
-        # 获取画面比例（设计图始终 16:9）
+        # 获取画面比例（人物设计图 3:4）
         aspect_ratio = get_aspect_ratio(project, "characters")
 
-        # 构建完整的生成 prompt
+        # 构建完整的生成 prompt（优化后的格式）
         style = project.get("style", "")
-        full_prompt = f"{req.prompt}"
-        if style:
-            full_prompt = f"{style}。{full_prompt}"
+        style_part = f"，{style}" if style else ""
 
-        # 添加人物设计图专用前缀
-        full_prompt = f"人物设计图，全身像，白色背景。{full_prompt}"
+        full_prompt = f"""人物设计参考图{style_part}。
+
+「{char_name}」的全身立绘。
+
+{req.prompt}
+
+构图要求：单人全身像，站立姿态自然，面向镜头。
+背景：纯净浅灰色，无任何装饰元素。
+光线：柔和均匀的摄影棚照明，无强烈阴影。
+画质：高清，细节清晰，色彩准确。"""
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(
             prompt=full_prompt,
             resource_type="characters",
             resource_id=char_name,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            image_size="2K"
         )
 
         # 更新 project.json 中的 character_sheet
@@ -361,7 +371,8 @@ async def generate_clue(
             prompt=full_prompt,
             resource_type="clues",
             resource_id=clue_name,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            image_size="2K"
         )
 
         # 更新 project.json 中的 clue_sheet

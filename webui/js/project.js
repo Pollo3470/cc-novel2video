@@ -203,7 +203,7 @@ function renderCharacters() {
 
         return `
             <div class="bg-gray-800 rounded-lg overflow-hidden">
-                <div class="aspect-video bg-gray-700 relative group">
+                <div class="aspect-portrait-3-4 bg-gray-700 relative group">
                     ${imageUrl
                         ? `<img src="${imageUrl}" alt="${name}" class="w-full h-full object-cover">
                            <button onclick="event.stopPropagation(); openLightbox('${imageUrl}', '${name}')"

@@ -31,13 +31,18 @@ def build_character_prompt(name: str, description: str, style: str = "") -> str:
     Returns:
         完整的 prompt 字符串
     """
-    style_prefix = f"，{style}" if style else ""
+    style_part = f"，{style}" if style else ""
 
-    prompt = f"""一张专业的人物设计参考图{style_prefix}。
+    prompt = f"""人物设计参考图{style_part}。
 
-人物「{name}」的三视图设计稿。{description}
+「{name}」的全身立绘。
 
-三个等比例全身像水平排列在纯净浅灰背景上：左侧正面、中间四分之三侧面、右侧纯侧面轮廓。柔和均匀的摄影棚照明，无强烈阴影。"""
+{description}
+
+构图要求：单人全身像，站立姿态自然，面向镜头。
+背景：纯净浅灰色，无任何装饰元素。
+光线：柔和均匀的摄影棚照明，无强烈阴影。
+画质：高清，细节清晰，色彩准确。"""
 
     return prompt
 
@@ -85,7 +90,7 @@ def generate_character(
         prompt=prompt,
         resource_type="characters",
         resource_id=character_name,
-        aspect_ratio="16:9"
+        aspect_ratio="3:4"
     )
 
     print(f"✅ 人物设计图已保存: {output_path} (版本 v{version})")
