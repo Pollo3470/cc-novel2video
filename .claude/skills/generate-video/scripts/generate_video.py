@@ -30,6 +30,10 @@ from typing import Optional
 from lib.gemini_client import GeminiClient
 from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
+from lib.prompt_utils import (
+    video_prompt_to_yaml,
+    is_structured_video_prompt
+)
 
 
 # ============================================================================
@@ -40,18 +44,33 @@ def get_video_prompt(item: dict) -> str:
     """
     获取视频生成 Prompt
 
-    直接使用 video_prompt 字段内容。
+    支持结构化 prompt 格式：如果 video_prompt 是 dict，则转换为 YAML 格式。
 
     Args:
         item: 片段/场景字典
 
     Returns:
-        video_prompt 字符串
+        video_prompt 字符串（可能是 YAML 格式或普通字符串）
     """
-    prompt = item.get('video_prompt', '')
+    prompt = item.get('video_prompt')
     if not prompt:
         item_id = item.get('segment_id') or item.get('scene_id')
         raise ValueError(f"片段/场景缺少 video_prompt 字段: {item_id}")
+
+    # 检测是否为结构化格式
+    if is_structured_video_prompt(prompt):
+        # 转换为 YAML 格式
+        return video_prompt_to_yaml(prompt)
+
+    # 避免将 dict 直接下传导致类型错误
+    if isinstance(prompt, dict):
+        item_id = item.get('segment_id') or item.get('scene_id')
+        raise ValueError(f"片段/场景 video_prompt 为对象但格式不符合结构化规范: {item_id}")
+
+    if not isinstance(prompt, str):
+        item_id = item.get('segment_id') or item.get('scene_id')
+        raise TypeError(f"片段/场景 video_prompt 类型无效（期望 str 或 dict）: {item_id}")
+
     return prompt
 
 

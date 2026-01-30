@@ -177,9 +177,26 @@ model: opus
       "characters_in_segment": ["姜月茴"],
       "clues_in_segment": ["襁褓"],
 
-      "image_prompt": "姜府闺房内，雕梁画栋的古典建筑。中景镜头，年轻女子姜月茴穿着淡青色绣花罗裙，站在窗前，手中捧着一封信，神情凝重中带着期待。午后柔和的自然光从窗外洒入，营造出期待与不安的氛围。",
+      "image_prompt": {
+        "scene": "[场景环境描述：包含地点、氛围、关键视觉元素的叙述性描述]",
+        "composition": {
+          "shot_type": "[镜头类型：Extreme Close-up / Close-up / Medium Close-up / Medium Shot / Medium Long Shot / Long Shot / Extreme Long Shot / Over-the-shoulder / Point-of-view]",
+          "lighting": "[光线描述：光源方向、色温、阴影特征]",
+          "ambiance": "[氛围描述：色调、情绪、环境效果如雾气、尘埃等]"
+        }
+      },
 
-      "video_prompt": "中景镜头，姜府闺房内。姜月茴站在窗前，缓缓展开信纸阅读，眉头微蹙。纸张翻动声。镜头静态，午后柔和自然光，期待与不安的氛围。",
+      "video_prompt": {
+        "action": "[动作描述：主体在片段时长内的具体动作、姿态、表情变化]",
+        "camera_motion": "[摄像机运动：Static / Pan Left / Pan Right / Tilt Up / Tilt Down / Zoom In / Zoom Out / Tracking Shot]",
+        "ambiance_audio": "[环境音效：仅描述 diegetic sound（画内音），不包含音乐或旁白]",
+        "dialogue": [
+          {
+            "speaker": "[角色名，来自 characters_in_segment]",
+            "line": "[对话内容，仅当 novel_text 包含角色对话时填写]"
+          }
+        ]
+      },
 
       "transition_to_next": "cut",
 
@@ -208,49 +225,93 @@ model: opus
    - `video_prompt`: 视频生成 Prompt（直接用于 Veo API）
    - `duration_seconds`: 仅支持 4/6/8 秒
 
-5. **image_prompt 设计指南**：
+5. **image_prompt 设计指南（结构化格式）**：
 
-   > **核心原则**: 描述场景，而非简单罗列关键词。叙述性的描述段落比零散的词汇列表产生更好的图像。
-
-   **结构模板**:
+   **结构定义**：
+   ```json
+   {
+     "scene": "[场景环境描述]",
+     "composition": {
+       "shot_type": "[镜头类型]",
+       "lighting": "[光线描述]",
+       "ambiance": "[氛围描述]"
+     }
+   }
    ```
-   [场景环境的叙述性描述]。[镜头类型]，[人物名称][穿着/姿态的具体描述]。
-   [人物正在做什么的动作描述]。[重要线索/道具的具体描述]。
-   [光线来源和质感]，营造出[情绪氛围]的氛围。
+
+   **字段说明**：
+   - `scene`：场景环境的叙述性描述，包含地点、关键视觉元素、人物姿态
+   - `shot_type`：从以下选项中选择：
+     - `Extreme Close-up`（大特写）：面部局部或物体细节
+     - `Close-up`（特写）：面部或重要物体
+     - `Medium Close-up`（中近景）：头部到胸部
+     - `Medium Shot`（中景）：头部到腰部
+     - `Medium Long Shot`（中远景）：头部到膝盖
+     - `Long Shot`（远景）：全身可见
+     - `Extreme Long Shot`（大远景）：人物在环境中很小
+     - `Over-the-shoulder`（过肩镜头）：从一个角色肩后看另一个角色
+     - `Point-of-view`（主观镜头）：从角色视角看
+   - `lighting`：光源方向、色温、阴影特征（如"午后柔和自然光从窗外洒入"）
+   - `ambiance`：色调、情绪、环境效果（如"温馨宁静的氛围，暖黄色调"）
+
+   **注意**：
+   - **Style（风格）** 由项目级 project.json 的 style 字段统一决定，不在每个 segment 中填写
+   - **人物和线索** 通过 characters_in_segment / clues_in_segment 字段引用，不在 image_prompt 中重复
+   - 画面比例不写入 prompt（通过 API 参数设置）
+
+6. **video_prompt 设计指南（结构化格式）**：
+
+   **结构定义**：
+   ```json
+   {
+     "action": "[动作描述]",
+     "camera_motion": "[摄像机运动]",
+     "ambiance_audio": "[环境音效]",
+     "dialogue": [{"speaker": "[角色名]", "line": "[台词]"}]
+   }
    ```
 
-   **要素清单**:
-   - 场景环境描述（叙述性，非关键词）
-   - 镜头类型（如 `close-up`、`wide shot`、`medium shot`）
-   - 人物外观、姿态、表情（使用人物名称，代码自动附加 character_sheet）
-   - 重要道具/线索（使用线索名称，代码自动附加 clue_sheet）
-   - 光线和色调
-   - 情绪氛围
-
-   **注意**：画面比例不写入 prompt（通过 API 参数设置）
-
-6. **video_prompt 设计指南**：
-
-   **结构顺序**:
-   1. 开场: 镜头类型 + 场景环境
-   2. 动作: 人物具体动作的动态描述
-   3. 对话: 仅当 novel_text 有角色对话时，使用格式 `角色名（情绪）说道："对话内容"`
-   4. 音效: 自然融入的声音描述
-   5. 镜头运动: 相机移动方式（如静态、缓慢推进）
-   6. 氛围: 光线和情绪
+   **字段说明**：
+   - `action`：主体在片段时长内的具体动作、姿态、表情变化
+   - `camera_motion`：从以下选项中选择：
+     - `Static`（静止）：摄像机固定不动
+     - `Pan Left`（左摇）：摄像机水平向左转动
+     - `Pan Right`（右摇）：摄像机水平向右转动
+     - `Tilt Up`（上摇）：摄像机垂直向上转动
+     - `Tilt Down`（下摇）：摄像机垂直向下转动
+     - `Zoom In`（推进）：镜头拉近
+     - `Zoom Out`（拉远）：镜头拉远
+     - `Tracking Shot`（跟踪）：摄像机跟随主体移动
+   - `ambiance_audio`：仅描述 diegetic sound（画内音）- 环境声、脚步声、物体声音，**不包含音乐或旁白**
+   - `dialogue`：对话列表，仅当 novel_text 包含角色对话时填写
+     - `speaker`：角色名（必须来自 characters_in_segment）
+     - `line`：对话内容
 
    **说书模式特别注意**：
    - **不写入旁白**：novel_text 由后期人工配音，不写入 video_prompt
-   - **仅写入对话**：只有当 novel_text 包含角色对话时才写入 video_prompt
+   - **仅写入对话**：只有当 novel_text 包含角色对话时才填写 dialogue 数组
+   - **无对话时**：dialogue 字段为空数组 `[]`
 
-   **示例**（有对话）:
-   ```
-   中景镜头，姜府内厅。老管家躬身向前，恭敬地递上书信。姜月茴伸手接过，嘴角微微上扬。老管家（恭敬地）说道："夫人，这是侯爷的亲笔信。" 纸张轻微翻动声，脚步声。镜头静态，柔和自然光。
+   **示例（有对话）**：
+   ```json
+   {
+     "action": "老管家躬身向前，恭敬地递上书信，姜月茴伸手接过，嘴角微微上扬",
+     "camera_motion": "Static",
+     "ambiance_audio": "纸张轻微翻动声，脚步声",
+     "dialogue": [
+       {"speaker": "老管家", "line": "夫人，这是侯爷的亲笔信。"}
+     ]
+   }
    ```
 
-   **示例**（无对话）:
-   ```
-   中景镜头，姜府闺房内。姜月茴站在窗前，缓缓展开信纸阅读，眉头微蹙。纸张翻动声。镜头静态，午后柔和自然光，期待与不安的氛围。
+   **示例（无对话）**：
+   ```json
+   {
+     "action": "姜月茴站在窗前，缓缓展开信纸阅读，眉头微蹙",
+     "camera_motion": "Static",
+     "ambiance_audio": "纸张翻动声",
+     "dialogue": []
+   }
    ```
 
 7. **segment_break 设置**：

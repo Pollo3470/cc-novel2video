@@ -31,6 +31,9 @@ Thumbs.db
 projects/*
 vertex_keys/*
 
+# Reference repo (keep local, don't commit)
+docs/storycraft/
+
 # Keep project structure but ignore generated content
 !projects/.gitkeep
 

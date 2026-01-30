@@ -34,6 +34,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from lib.gemini_client import GeminiClient, RateLimiter
 from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
+from lib.prompt_utils import (
+    image_prompt_to_yaml,
+    is_structured_image_prompt
+)
 
 
 # ==================== 并行处理工具类 ====================
@@ -236,11 +240,13 @@ def build_grid_prompt(scenes: List[dict], characters: dict, clues: dict = None, 
     """
     构建多宫格分镜图生成 prompt
 
+    支持结构化 prompt 格式：如果 image_prompt 是 dict，则转换为 YAML 格式。
+
     Args:
         scenes: 场景列表
         characters: 人物字典（保留参数以兼容调用）
         clues: 线索字典（保留参数以兼容调用）
-        style: 项目整体风格（保留参数以兼容调用）
+        style: 项目整体风格（用于 YAML 转换）
         id_field: 场景ID字段名
         char_field: 人物字段名（保留参数以兼容调用）
         clue_field: 线索字段名（保留参数以兼容调用）
@@ -251,13 +257,20 @@ def build_grid_prompt(scenes: List[dict], characters: dict, clues: dict = None, 
     scene_count = len(scenes)
     _, _, layout_name = get_grid_layout(scene_count)
 
-    # 构建各宫格描述，直接使用 image_prompt
+    # 构建各宫格描述，支持结构化 image_prompt
     grid_descriptions = []
     for i, scene in enumerate(scenes, 1):
         image_prompt = scene.get('image_prompt', '')
         if not image_prompt:
             raise ValueError(f"场景 {scene[id_field]} 缺少 image_prompt 字段")
-        grid_descriptions.append(f"宫格{i}（{scene[id_field]}）：{image_prompt}")
+
+        # 检测是否为结构化格式
+        if is_structured_image_prompt(image_prompt):
+            prompt_content = image_prompt_to_yaml(image_prompt, style)
+        else:
+            prompt_content = image_prompt
+
+        grid_descriptions.append(f"宫格{i}（{scene[id_field]}）：{prompt_content}")
 
     prompt = f"""一张 16:9 横屏的多宫格分镜图，包含 {scene_count} 个连续场景。
 采用 {layout_name} 布局，每个格子展示一个场景的关键画面。宫格之间用细黑线分隔。
@@ -273,7 +286,7 @@ def build_scene_prompt(scene: dict, characters: dict, grid_position: int, total_
     """
     构建单独场景图生成 prompt（从多宫格参考图生成单独场景）
 
-    直接使用 image_prompt 字段内容。
+    支持结构化 prompt 格式：如果 image_prompt 是 dict，则转换为 YAML 格式。
 
     Args:
         scene: 场景字典
@@ -281,7 +294,7 @@ def build_scene_prompt(scene: dict, characters: dict, grid_position: int, total_
         grid_position: 该场景在多宫格中的位置（从 1 开始）
         total_in_grid: 该多宫格中的场景总数
         clues: 线索字典（保留参数以兼容调用）
-        style: 项目整体风格（保留参数以兼容调用）
+        style: 项目整体风格（用于 YAML 转换）
         id_field: 场景ID字段名
         char_field: 人物字段名（保留参数以兼容调用）
         clue_field: 线索字段名（保留参数以兼容调用）
@@ -293,6 +306,13 @@ def build_scene_prompt(scene: dict, characters: dict, grid_position: int, total_
     if not image_prompt:
         raise ValueError(f"场景 {scene[id_field]} 缺少 image_prompt 字段")
 
+    # 检测是否为结构化格式
+    if is_structured_image_prompt(image_prompt):
+        # 转换为 YAML 格式
+        prompt_content = image_prompt_to_yaml(image_prompt, style)
+    else:
+        prompt_content = image_prompt
+
     # 确定宫格位置描述
     _, cols, layout_name = get_grid_layout(total_in_grid)
     row_num = (grid_position - 1) // cols + 1
@@ -301,7 +321,7 @@ def build_scene_prompt(scene: dict, characters: dict, grid_position: int, total_
 
     prompt = f"""根据提供的多宫格分镜参考图（{layout_name}），生成其中 {position_desc} 的单独高清场景图。
 
-{image_prompt}
+{prompt_content}
 
 人物必须与提供的参考图完全一致。"""
 
@@ -320,23 +340,29 @@ def build_direct_scene_prompt(
     """
     构建直接生成场景图的 prompt（narration 模式，无多宫格参考）
 
-    直接使用 image_prompt 字段内容。
+    支持结构化 prompt 格式：如果 image_prompt 是 dict，则转换为 YAML 格式。
 
     Args:
         segment: 片段字典
         characters: 人物字典（保留参数以兼容调用）
         clues: 线索字典（保留参数以兼容调用）
-        style: 项目风格（保留参数以兼容调用）
+        style: 项目风格（用于 YAML 转换）
         id_field: ID 字段名
         char_field: 人物字段名（保留参数以兼容调用）
         clue_field: 线索字段名（保留参数以兼容调用）
 
     Returns:
-        image_prompt 字符串
+        image_prompt 字符串（可能是 YAML 格式或普通字符串）
     """
     image_prompt = segment.get('image_prompt', '')
     if not image_prompt:
         raise ValueError(f"片段 {segment[id_field]} 缺少 image_prompt 字段")
+
+    # 检测是否为结构化格式
+    if is_structured_image_prompt(image_prompt):
+        # 转换为 YAML 格式
+        yaml_prompt = image_prompt_to_yaml(image_prompt, style)
+        return f"{yaml_prompt}\n竖屏构图。"
 
     return f"{image_prompt} 竖屏构图。"
 

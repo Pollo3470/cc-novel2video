@@ -106,7 +106,13 @@ function updateAspectRatioHint(contentMode) {
 function renderOverview() {
     // 填充表单
     document.getElementById('edit-title').value = currentProject.title || '';
-    document.getElementById('edit-style').value = currentProject.style || '';
+
+    // 设置视觉风格（预设选项：Photographic / Anime / 3D Animation）
+    const styleSelect = document.getElementById('edit-style');
+    const validStyles = ['Photographic', 'Anime', '3D Animation'];
+    const currentStyle = currentProject.style || 'Photographic';
+    // 如果当前风格不在预设选项中，默认使用 Photographic
+    styleSelect.value = validStyles.includes(currentStyle) ? currentStyle : 'Photographic';
 
     // 设置内容模式
     const contentMode = currentProject.content_mode || 'narration';
