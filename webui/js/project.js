@@ -8,6 +8,248 @@ let currentDrafts = {};
 let projectName = null;
 let cacheBuster = Date.now();
 
+// ==================== Prompt 编辑器（结构化） ====================
+
+// 与 lib/prompt_utils.py 保持一致（前端不依赖后端返回，避免额外接口）
+const SHOT_TYPE_OPTIONS = [
+    "Extreme Close-up",
+    "Close-up",
+    "Medium Close-up",
+    "Medium Shot",
+    "Medium Long Shot",
+    "Long Shot",
+    "Extreme Long Shot",
+    "Over-the-shoulder",
+    "Point-of-view",
+];
+
+const CAMERA_MOTION_OPTIONS = [
+    "Static",
+    "Pan Left",
+    "Pan Right",
+    "Tilt Up",
+    "Tilt Down",
+    "Zoom In",
+    "Zoom Out",
+    "Tracking Shot",
+];
+
+const SHOT_TYPE_ZH = {
+    "Extreme Close-up": "极特写",
+    "Close-up": "特写",
+    "Medium Close-up": "中近景",
+    "Medium Shot": "中景",
+    "Medium Long Shot": "中远景",
+    "Long Shot": "远景",
+    "Extreme Long Shot": "极远景",
+    "Over-the-shoulder": "越肩镜头",
+    "Point-of-view": "主观视角（POV）",
+};
+
+const CAMERA_MOTION_ZH = {
+    "Static": "固定镜头",
+    "Pan Left": "左摇",
+    "Pan Right": "右摇",
+    "Tilt Up": "上摇",
+    "Tilt Down": "下摇",
+    "Zoom In": "推近（变焦）",
+    "Zoom Out": "拉远（变焦）",
+    "Tracking Shot": "跟拍（移动镜头）",
+};
+
+const DEFAULT_SHOT_TYPE = "Medium Shot";
+const DEFAULT_CAMERA_MOTION = "Static";
+
+/**
+ * 提取 prompt 的完整文本（用于预览等场景）
+ */
+function getPromptText(prompt) {
+    if (!prompt) return '';
+    if (typeof prompt === 'string') return prompt;
+    if (typeof prompt !== 'object') return '';
+    return prompt.scene || prompt.action || '';
+}
+
+/**
+ * 获取 prompt 预览文本（用于卡片展示）
+ */
+function getPromptPreview(prompt, maxLength = 40) {
+    const text = getPromptText(prompt);
+    return text.substring(0, maxLength);
+}
+
+function canonicalizeEnumValue(value, options) {
+    const text = (value ?? '').trim();
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    return options.find(o => o.toLowerCase() === lower) || text;
+}
+
+function populateSelectOptions(selectEl, options, zhMap = null) {
+    if (!selectEl) return;
+    const existingValues = new Set(Array.from(selectEl.options).map(o => o.value));
+    options.forEach(value => {
+        if (existingValues.has(value)) return;
+        const opt = document.createElement('option');
+        opt.value = value;
+        const zh = zhMap ? zhMap[value] : null;
+        opt.textContent = zh ? `${zh}（${value}）` : value;
+        selectEl.appendChild(opt);
+    });
+}
+
+function setSelectValueWithCustomOption(selectEl, value) {
+    if (!selectEl) return;
+    selectEl.querySelectorAll('option[data-custom="1"]').forEach(o => o.remove());
+    const text = (value ?? '').trim();
+    if (text && !Array.from(selectEl.options).some(o => o.value === text)) {
+        const opt = document.createElement('option');
+        opt.value = text;
+        opt.textContent = `自定义：${text}`;
+        opt.dataset.custom = "1";
+        const insertBefore = selectEl.querySelector('option[value=""]')?.nextSibling || selectEl.firstChild;
+        selectEl.insertBefore(opt, insertBefore);
+    }
+    selectEl.value = text;
+}
+
+function clearDialogueList(prefix) {
+    const container = document.getElementById(`${prefix}-video-dialogue-list`);
+    if (!container) return;
+    container.innerHTML = '';
+}
+
+function addDialogueRow(prefix, speaker = '', line = '') {
+    const container = document.getElementById(`${prefix}-video-dialogue-list`);
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'prompt-dialogue-row flex items-center space-x-2';
+    row.innerHTML = `
+        <input type="text" class="dialogue-speaker w-24 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white text-sm" placeholder="角色">
+        <input type="text" class="dialogue-line flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded focus:outline-none focus:border-blue-500 text-white text-sm" placeholder="台词">
+        <button type="button" class="dialogue-remove px-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-xs">删除</button>
+    `;
+
+    row.querySelector('.dialogue-speaker').value = speaker;
+    row.querySelector('.dialogue-line').value = line;
+    row.querySelector('.dialogue-remove').onclick = () => row.remove();
+
+    container.appendChild(row);
+}
+
+function readDialogueList(prefix) {
+    const container = document.getElementById(`${prefix}-video-dialogue-list`);
+    if (!container) return [];
+    const rows = Array.from(container.querySelectorAll('.prompt-dialogue-row'));
+    return rows
+        .map(row => {
+            const speaker = row.querySelector('.dialogue-speaker')?.value?.trim() || '';
+            const line = row.querySelector('.dialogue-line')?.value?.trim() || '';
+            return { speaker, line };
+        })
+        .filter(d => d.speaker || d.line);
+}
+
+function setImagePromptEditor(prefix, imagePrompt) {
+    const sceneEl = document.getElementById(`${prefix}-image-scene`);
+    const shotTypeEl = document.getElementById(`${prefix}-image-shot-type`);
+    const lightingEl = document.getElementById(`${prefix}-image-lighting`);
+    const ambianceEl = document.getElementById(`${prefix}-image-ambiance`);
+
+    if (!sceneEl || !shotTypeEl || !lightingEl || !ambianceEl) return;
+
+    if (typeof imagePrompt === 'object' && imagePrompt && imagePrompt.scene) {
+        sceneEl.value = imagePrompt.scene || '';
+        const shot = canonicalizeEnumValue(imagePrompt.composition?.shot_type, SHOT_TYPE_OPTIONS) || DEFAULT_SHOT_TYPE;
+        setSelectValueWithCustomOption(shotTypeEl, shot);
+        lightingEl.value = imagePrompt.composition?.lighting || '';
+        ambianceEl.value = imagePrompt.composition?.ambiance || '';
+        return;
+    }
+
+    // 兼容旧格式：字符串 prompt 直接放到 scene 字段
+    sceneEl.value = typeof imagePrompt === 'string' ? imagePrompt : '';
+    setSelectValueWithCustomOption(shotTypeEl, DEFAULT_SHOT_TYPE);
+    lightingEl.value = '';
+    ambianceEl.value = '';
+}
+
+function collectImagePrompt(prefix) {
+    const scene = document.getElementById(`${prefix}-image-scene`)?.value?.trim() || '';
+    const shotTypeRaw = document.getElementById(`${prefix}-image-shot-type`)?.value || '';
+    const lighting = document.getElementById(`${prefix}-image-lighting`)?.value?.trim() || '';
+    const ambiance = document.getElementById(`${prefix}-image-ambiance`)?.value?.trim() || '';
+
+    if (!scene) {
+        return { ok: false, error: 'Scene 不能为空' };
+    }
+
+    const shot_type = shotTypeRaw.trim() || DEFAULT_SHOT_TYPE;
+    return {
+        ok: true,
+        value: {
+            scene,
+            composition: { shot_type, lighting, ambiance }
+        }
+    };
+}
+
+function setVideoPromptEditor(prefix, videoPrompt) {
+    const actionEl = document.getElementById(`${prefix}-video-action`);
+    const cameraMotionEl = document.getElementById(`${prefix}-video-camera-motion`);
+    const ambianceAudioEl = document.getElementById(`${prefix}-video-ambiance-audio`);
+
+    if (!actionEl || !cameraMotionEl || !ambianceAudioEl) return;
+
+    clearDialogueList(prefix);
+
+    if (typeof videoPrompt === 'object' && videoPrompt && videoPrompt.action) {
+        actionEl.value = videoPrompt.action || '';
+        const motion = canonicalizeEnumValue(videoPrompt.camera_motion, CAMERA_MOTION_OPTIONS) || DEFAULT_CAMERA_MOTION;
+        setSelectValueWithCustomOption(cameraMotionEl, motion);
+        ambianceAudioEl.value = videoPrompt.ambiance_audio || '';
+        (videoPrompt.dialogue || []).forEach(d => addDialogueRow(prefix, d.speaker || '', d.line || ''));
+        return;
+    }
+
+    // 兼容旧格式：字符串 prompt 直接放到 action 字段
+    actionEl.value = typeof videoPrompt === 'string' ? videoPrompt : '';
+    setSelectValueWithCustomOption(cameraMotionEl, DEFAULT_CAMERA_MOTION);
+    ambianceAudioEl.value = '';
+}
+
+function collectVideoPrompt(prefix) {
+    const action = document.getElementById(`${prefix}-video-action`)?.value?.trim() || '';
+    const cameraMotionRaw = document.getElementById(`${prefix}-video-camera-motion`)?.value || '';
+    const ambiance_audio = document.getElementById(`${prefix}-video-ambiance-audio`)?.value?.trim() || '';
+    const dialogue = readDialogueList(prefix);
+
+    if (!action) {
+        return { ok: false, error: 'Action 不能为空' };
+    }
+
+    const camera_motion = cameraMotionRaw.trim() || DEFAULT_CAMERA_MOTION;
+    return {
+        ok: true,
+        value: { action, camera_motion, ambiance_audio, dialogue }
+    };
+}
+
+function initPromptEditors() {
+    populateSelectOptions(document.getElementById('segment-image-shot-type'), SHOT_TYPE_OPTIONS, SHOT_TYPE_ZH);
+    populateSelectOptions(document.getElementById('scene-image-shot-type'), SHOT_TYPE_OPTIONS, SHOT_TYPE_ZH);
+    populateSelectOptions(document.getElementById('segment-video-camera-motion'), CAMERA_MOTION_OPTIONS, CAMERA_MOTION_ZH);
+    populateSelectOptions(document.getElementById('scene-video-camera-motion'), CAMERA_MOTION_OPTIONS, CAMERA_MOTION_ZH);
+
+    const segmentAdd = document.getElementById('segment-video-dialogue-add');
+    if (segmentAdd) segmentAdd.onclick = () => addDialogueRow('segment');
+    const sceneAdd = document.getElementById('scene-video-dialogue-add');
+    if (sceneAdd) sceneAdd.onclick = () => addDialogueRow('scene');
+}
+
+// ==================== 页面初始化 ====================
+
 document.addEventListener('DOMContentLoaded', () => {
     // 从 URL 获取项目名称
     const params = new URLSearchParams(window.location.search);
@@ -450,6 +692,10 @@ function renderSegmentCard(segment, scriptFile) {
         'pending': 'bg-gray-600'
     }[assets.status] || 'bg-gray-600';
 
+    const displayText = segment.novel_text || getPromptText(segment.image_prompt) || '无描述';
+    const previewText = displayText.substring(0, 40);
+    const needsEllipsis = displayText.length > 40;
+
     return `
         <div class="segment-card bg-gray-700 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
              onclick="editSegment('${segment.segment_id}', '${scriptFile}')">
@@ -465,7 +711,7 @@ function renderSegmentCard(segment, scriptFile) {
                 ${segment.segment_break ? `<div class="absolute bottom-2 left-2 px-2 py-0.5 bg-orange-600 text-xs rounded">转场</div>` : ''}
             </div>
             <div class="p-2">
-                <p class="text-xs text-gray-400 line-clamp-2">${segment.novel_text?.substring(0, 40) || segment.image_prompt?.substring(0, 40) || '无描述'}${(segment.novel_text?.length > 40 || segment.image_prompt?.length > 40) ? '...' : ''}</p>
+                <p class="text-xs text-gray-400 line-clamp-2">${previewText}${needsEllipsis ? '...' : ''}</p>
             </div>
         </div>
     `;
@@ -678,6 +924,9 @@ function setupEventListeners() {
     // 草稿编辑/预览模式切换
     document.getElementById('draft-mode-edit').onclick = () => toggleDraftMode('edit');
     document.getElementById('draft-mode-preview').onclick = () => toggleDraftMode('preview');
+
+    // Prompt 编辑器初始化（枚举选项/对白按钮）
+    initPromptEditors();
 }
 
 /**
@@ -978,8 +1227,8 @@ async function editSegment(segmentId, scriptFile) {
     // 填充表单
     document.getElementById('segment-novel-text').textContent = segment.novel_text || '（无原文）';
     document.getElementById('segment-duration').value = segment.duration_seconds || 4;
-    document.getElementById('segment-image-prompt').value = segment.image_prompt || '';
-    document.getElementById('segment-video-prompt').value = segment.video_prompt || '';
+    setImagePromptEditor('segment', segment.image_prompt);
+    setVideoPromptEditor('segment', segment.video_prompt);
     document.getElementById('segment-break').value = segment.segment_break ? 'true' : 'false';
 
     // 显示分镜图预览
@@ -1026,12 +1275,24 @@ async function saveSegment() {
     const segmentId = document.getElementById('segment-id').value;
     const scriptFile = document.getElementById('segment-script-file').value;
 
+    const imagePromptResult = collectImagePrompt('segment');
+    if (!imagePromptResult.ok) {
+        alert(`分镜图 Prompt 格式错误: ${imagePromptResult.error}`);
+        return;
+    }
+
+    const videoPromptResult = collectVideoPrompt('segment');
+    if (!videoPromptResult.ok) {
+        alert(`视频 Prompt 格式错误: ${videoPromptResult.error}`);
+        return;
+    }
+
     const updates = {
         script_file: scriptFile,
         duration_seconds: parseInt(document.getElementById('segment-duration').value) || 4,
         segment_break: document.getElementById('segment-break').value === 'true',
-        image_prompt: document.getElementById('segment-image-prompt').value,
-        video_prompt: document.getElementById('segment-video-prompt').value
+        image_prompt: imagePromptResult.value,
+        video_prompt: videoPromptResult.value
     };
 
     try {
@@ -1059,8 +1320,8 @@ async function editScene(sceneId, scriptFile) {
     // 填充表单
     document.getElementById('scene-duration').value = scene.duration_seconds || 6;
     document.getElementById('scene-segment-break').value = scene.segment_break ? 'true' : 'false';
-    document.getElementById('scene-image-prompt').value = scene.image_prompt || '';
-    document.getElementById('scene-video-prompt').value = scene.video_prompt || '';
+    setImagePromptEditor('scene', scene.image_prompt);
+    setVideoPromptEditor('scene', scene.video_prompt);
 
     // 显示预览
     const assets = scene.generated_assets || {};
@@ -1102,11 +1363,23 @@ async function saveScene() {
     const sceneId = document.getElementById('scene-id').value;
     const scriptFile = document.getElementById('scene-script-file').value;
 
+    const imagePromptResult = collectImagePrompt('scene');
+    if (!imagePromptResult.ok) {
+        alert(`分镜图 Prompt 格式错误: ${imagePromptResult.error}`);
+        return;
+    }
+
+    const videoPromptResult = collectVideoPrompt('scene');
+    if (!videoPromptResult.ok) {
+        alert(`视频 Prompt 格式错误: ${videoPromptResult.error}`);
+        return;
+    }
+
     const updates = {
         duration_seconds: parseInt(document.getElementById('scene-duration').value) || 6,
         segment_break: document.getElementById('scene-segment-break').value === 'true',
-        image_prompt: document.getElementById('scene-image-prompt').value,
-        video_prompt: document.getElementById('scene-video-prompt').value
+        image_prompt: imagePromptResult.value,
+        video_prompt: videoPromptResult.value
     };
 
     try {
@@ -1740,11 +2013,12 @@ async function handleSegmentVersionChange(type, segmentId) {
  * 生成片段分镜图
  */
 async function generateSegmentStoryboard(segmentId, scriptFile) {
-    const prompt = document.getElementById('segment-image-prompt').value;
-    if (!prompt.trim()) {
-        alert('请输入分镜图 Prompt');
+    const promptResult = collectImagePrompt('segment');
+    if (!promptResult.ok) {
+        alert(`分镜图 Prompt 格式错误: ${promptResult.error}`);
         return;
     }
+    const prompt = promptResult.value;
 
     const btn = document.getElementById('segment-generate-storyboard-btn');
     const loadingEl = document.getElementById('segment-storyboard-loading');
@@ -1782,11 +2056,12 @@ async function generateSegmentStoryboard(segmentId, scriptFile) {
  * 生成片段视频
  */
 async function generateSegmentVideo(segmentId, scriptFile) {
-    const prompt = document.getElementById('segment-video-prompt').value;
-    if (!prompt.trim()) {
-        alert('请输入视频 Prompt');
+    const promptResult = collectVideoPrompt('segment');
+    if (!promptResult.ok) {
+        alert(`视频 Prompt 格式错误: ${promptResult.error}`);
         return;
     }
+    const prompt = promptResult.value;
 
     const duration = parseInt(document.getElementById('segment-duration').value) || 4;
     const btn = document.getElementById('segment-generate-video-btn');
@@ -1831,14 +2106,7 @@ async function restoreSegmentVersion(resourceType, segmentId) {
     if (!confirm(`确定要还原到 v${selectedVersion} 吗？`)) return;
 
     try {
-        const result = await API.restoreVersion(projectName, resourceType, segmentId, selectedVersion);
-
-        // 将还原的 prompt 填充到编辑框
-        if (resourceType === 'storyboards') {
-            document.getElementById('segment-image-prompt').value = result.prompt || '';
-        } else {
-            document.getElementById('segment-video-prompt').value = result.prompt || '';
-        }
+        await API.restoreVersion(projectName, resourceType, segmentId, selectedVersion);
 
         // 刷新
         cacheBuster = Date.now();
@@ -1911,8 +2179,12 @@ async function handleSceneVersionChange(type, sceneId) {
 }
 
 async function generateSceneStoryboard(sceneId, scriptFile) {
-    const prompt = document.getElementById('scene-image-prompt').value;
-    if (!prompt.trim()) { alert('请输入分镜图 Prompt'); return; }
+    const promptResult = collectImagePrompt('scene');
+    if (!promptResult.ok) {
+        alert(`分镜图 Prompt 格式错误: ${promptResult.error}`);
+        return;
+    }
+    const prompt = promptResult.value;
 
     const btn = document.getElementById('scene-generate-storyboard-btn');
     const loadingEl = document.getElementById('scene-storyboard-loading');
@@ -1938,8 +2210,12 @@ async function generateSceneStoryboard(sceneId, scriptFile) {
 }
 
 async function generateSceneVideo(sceneId, scriptFile) {
-    const prompt = document.getElementById('scene-video-prompt').value;
-    if (!prompt.trim()) { alert('请输入视频 Prompt'); return; }
+    const promptResult = collectVideoPrompt('scene');
+    if (!promptResult.ok) {
+        alert(`视频 Prompt 格式错误: ${promptResult.error}`);
+        return;
+    }
+    const prompt = promptResult.value;
 
     const durationInput = document.getElementById('scene-duration');
     const duration = normalizeVeoDurationSeconds(durationInput.value, 6);
@@ -1975,12 +2251,7 @@ async function restoreSceneVersion(resourceType, sceneId) {
     if (!confirm(`确定要还原到 v${selectedVersion} 吗？`)) return;
 
     try {
-        const result = await API.restoreVersion(projectName, resourceType, sceneId, selectedVersion);
-        if (resourceType === 'storyboards') {
-            document.getElementById('scene-image-prompt').value = result.prompt || '';
-        } else {
-            document.getElementById('scene-video-prompt').value = result.prompt || '';
-        }
+        await API.restoreVersion(projectName, resourceType, sceneId, selectedVersion);
         cacheBuster = Date.now();
         const scriptFile = document.getElementById('scene-script-file').value;
         await initSceneVersionControls(sceneId, scriptFile, true, true);

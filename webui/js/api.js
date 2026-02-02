@@ -277,7 +277,7 @@ class API {
      * 生成分镜图
      * @param {string} projectName - 项目名称
      * @param {string} segmentId - 片段/场景 ID
-     * @param {string} prompt - 图片生成 prompt
+     * @param {string|object} prompt - 图片生成 prompt（支持字符串或结构化对象）
      * @param {string} scriptFile - 剧本文件名
      */
     static async generateStoryboard(projectName, segmentId, prompt, scriptFile) {
@@ -291,7 +291,7 @@ class API {
      * 生成视频
      * @param {string} projectName - 项目名称
      * @param {string} segmentId - 片段/场景 ID
-     * @param {string} prompt - 视频生成 prompt
+     * @param {string|object} prompt - 视频生成 prompt（支持字符串或结构化对象）
      * @param {string} scriptFile - 剧本文件名
      * @param {number} durationSeconds - 时长（秒）
      */

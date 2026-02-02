@@ -18,56 +18,7 @@ from pathlib import Path
 
 from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
-
-
-def build_prop_prompt(name: str, description: str, style: str = "") -> str:
-    """
-    构建道具类线索的 prompt
-
-    遵循 nano-banana 最佳实践：使用叙事性段落描述，而非关键词列表。
-
-    Args:
-        name: 线索名称
-        description: 线索描述（应为叙事性段落）
-        style: 项目整体风格（可选）
-
-    Returns:
-        完整的 prompt 字符串
-    """
-    style_prefix = f"，{style}" if style else ""
-
-    prompt = f"""一张专业的道具设计参考图{style_prefix}。
-
-道具「{name}」的多视角展示。{description}
-
-三个视图水平排列在纯净浅灰背景上：左侧正面全视图、中间45度侧视图展示立体感、右侧关键细节特写。柔和均匀的摄影棚照明，高清质感，色彩准确。"""
-
-    return prompt
-
-
-def build_location_prompt(name: str, description: str, style: str = "") -> str:
-    """
-    构建环境类线索的 prompt
-
-    遵循 nano-banana 最佳实践：使用叙事性段落描述，而非关键词列表。
-
-    Args:
-        name: 线索名称
-        description: 线索描述（应为叙事性段落）
-        style: 项目整体风格（可选）
-
-    Returns:
-        完整的 prompt 字符串
-    """
-    style_prefix = f"，{style}" if style else ""
-
-    prompt = f"""一张专业的场景设计参考图{style_prefix}。
-
-标志性场景「{name}」的视觉参考。{description}
-
-主画面占据四分之三区域展示环境整体外观与氛围，右下角小图为细节特写。柔和自然光线。"""
-
-    return prompt
+from lib.prompt_builders import build_clue_prompt
 
 
 def generate_clue(
@@ -99,11 +50,8 @@ def generate_clue(
     if not description:
         raise ValueError(f"线索 '{clue_name}' 的描述为空，请先添加描述")
 
-    # 根据类型选择 prompt 模板
-    if clue_type == 'location':
-        prompt = build_location_prompt(clue_name, description, style)
-    else:
-        prompt = build_prop_prompt(clue_name, description, style)
+    # 使用共享库构建 prompt（确保与 WebUI 侧一致）
+    prompt = build_clue_prompt(clue_name, description, clue_type, style)
 
     # 生成图片（带自动版本管理）
     generator = MediaGenerator(project_dir)

@@ -200,6 +200,8 @@ async def update_scene(name: str, scene_id: str, req: UpdateSceneRequest):
                 for key, value in req.updates.items():
                     if key in ["duration_seconds", "image_prompt", "video_prompt",
                                "characters_in_scene", "clues_in_scene", "segment_break"]:
+                        if value is None:
+                            continue
                         scene[key] = value
                 break
 
@@ -218,8 +220,8 @@ class UpdateSegmentRequest(BaseModel):
     script_file: str
     duration_seconds: Optional[int] = None
     segment_break: Optional[bool] = None
-    image_prompt: Optional[str] = None
-    video_prompt: Optional[str] = None
+    image_prompt: Optional[dict] = None
+    video_prompt: Optional[dict] = None
     transition_to_next: Optional[str] = None
 
 

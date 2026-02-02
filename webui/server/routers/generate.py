@@ -5,7 +5,7 @@
 使用 MediaGenerator 中间层自动处理版本管理。
 """
 
-from typing import Optional
+from typing import Optional, Union, Any
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from lib.project_manager import ProjectManager
 from lib.media_generator import MediaGenerator
 from lib.gemini_client import RateLimiter
+from lib.prompt_builders import build_character_prompt, build_clue_prompt
+from lib.prompt_utils import image_prompt_to_yaml, video_prompt_to_yaml, is_structured_image_prompt, is_structured_video_prompt
 
 router = APIRouter()
 
@@ -81,12 +83,12 @@ def normalize_veo_duration_seconds(duration_seconds: Optional[int]) -> str:
 # ==================== 请求模型 ====================
 
 class GenerateStoryboardRequest(BaseModel):
-    prompt: str
+    prompt: Union[str, dict]
     script_file: str
 
 
 class GenerateVideoRequest(BaseModel):
-    prompt: str
+    prompt: Union[str, dict]
     script_file: str
     duration_seconds: Optional[int] = 4
 
@@ -157,9 +159,32 @@ async def generate_storyboard(
                 if sheet_path.exists():
                     reference_images.append(sheet_path)
 
+        # 兼容 prompt 旧格式（字符串）与新格式（结构化对象）
+        prompt_text: str
+        if isinstance(req.prompt, str):
+            prompt_text = req.prompt
+        elif isinstance(req.prompt, dict):
+            if not is_structured_image_prompt(req.prompt):
+                raise HTTPException(status_code=400, detail="prompt 必须是字符串或包含 scene/composition 的对象")
+            scene_text = str(req.prompt.get("scene", "")).strip()
+            if not scene_text:
+                raise HTTPException(status_code=400, detail="prompt.scene 不能为空")
+            composition = req.prompt.get("composition") if isinstance(req.prompt.get("composition"), dict) else {}
+            normalized_prompt = {
+                "scene": scene_text,
+                "composition": {
+                    "shot_type": str(composition.get("shot_type") or "Medium Shot"),
+                    "lighting": str(composition.get("lighting", "") or ""),
+                    "ambiance": str(composition.get("ambiance", "") or ""),
+                },
+            }
+            prompt_text = image_prompt_to_yaml(normalized_prompt, project.get("style", ""))
+        else:
+            raise HTTPException(status_code=400, detail="prompt 必须是字符串或对象")
+
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(
-            prompt=req.prompt,
+            prompt=prompt_text,
             resource_type="storyboards",
             resource_id=segment_id,
             reference_images=reference_images if reference_images else None,
@@ -220,9 +245,45 @@ async def generate_video(
                 detail=f"请先生成分镜图 scene_{segment_id}.png"
             )
 
+        # 兼容 prompt 旧格式（字符串）与新格式（结构化对象）
+        prompt_text: str
+        if isinstance(req.prompt, str):
+            prompt_text = req.prompt
+        elif isinstance(req.prompt, dict):
+            if not is_structured_video_prompt(req.prompt):
+                raise HTTPException(status_code=400, detail="prompt 必须是字符串或包含 action/camera_motion 的对象")
+            action_text = str(req.prompt.get("action", "")).strip()
+            if not action_text:
+                raise HTTPException(status_code=400, detail="prompt.action 不能为空")
+            dialogue = req.prompt.get("dialogue", [])
+            if dialogue is None:
+                dialogue = []
+            if not isinstance(dialogue, list):
+                raise HTTPException(status_code=400, detail="prompt.dialogue 必须是数组")
+            normalized_dialogue = []
+            for item in dialogue:
+                if not isinstance(item, dict):
+                    continue
+                speaker = str(item.get("speaker", "") or "").strip()
+                line = str(item.get("line", "") or "").strip()
+                if speaker or line:
+                    normalized_dialogue.append({"speaker": speaker, "line": line})
+
+            normalized_prompt: dict[str, Any] = {
+                "action": action_text,
+                "camera_motion": str(req.prompt.get("camera_motion", "") or ""),
+                "ambiance_audio": str(req.prompt.get("ambiance_audio", "") or ""),
+                "dialogue": normalized_dialogue,
+            }
+            if not normalized_prompt["camera_motion"]:
+                normalized_prompt["camera_motion"] = "Static"
+            prompt_text = video_prompt_to_yaml(normalized_prompt)
+        else:
+            raise HTTPException(status_code=400, detail="prompt 必须是字符串或对象")
+
         # 使用 MediaGenerator 生成视频（自动处理版本管理）
         _, new_version, _, video_uri = await generator.generate_video_async(
-            prompt=req.prompt,
+            prompt=prompt_text,
             resource_type="videos",
             resource_id=segment_id,
             start_image=storyboard_file,
@@ -286,20 +347,9 @@ async def generate_character(
         # 获取画面比例（人物设计图 3:4）
         aspect_ratio = get_aspect_ratio(project, "characters")
 
-        # 构建完整的生成 prompt（优化后的格式）
+        # 使用共享库构建 Prompt（确保与 Skill 侧一致）
         style = project.get("style", "")
-        style_part = f"，{style}" if style else ""
-
-        full_prompt = f"""人物设计参考图{style_part}。
-
-「{char_name}」的全身立绘。
-
-{req.prompt}
-
-构图要求：单人全身像，站立姿态自然，面向镜头。
-背景：纯净浅灰色，无任何装饰元素。
-光线：柔和均匀的摄影棚照明，无强烈阴影。
-画质：高清，细节清晰，色彩准确。"""
+        full_prompt = build_character_prompt(char_name, req.prompt, style)
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(
@@ -353,18 +403,10 @@ async def generate_clue(
         # 获取画面比例（设计图始终 16:9）
         aspect_ratio = get_aspect_ratio(project, "clues")
 
-        # 构建完整的生成 prompt
+        # 使用共享库构建 Prompt（确保与 Skill 侧一致）
         style = project.get("style", "")
         clue_type = clue_data.get("type", "prop")
-
-        if clue_type == "prop":
-            prefix = "道具设计图，单独展示，白色背景。"
-        else:
-            prefix = "场景设计图，环境概念图。"
-
-        full_prompt = f"{prefix}{req.prompt}"
-        if style:
-            full_prompt = f"{style}。{full_prompt}"
+        full_prompt = build_clue_prompt(clue_name, req.prompt, clue_type, style)
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(

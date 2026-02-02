@@ -4,52 +4,27 @@ Character Generator - 使用 Gemini API 生成人物设计图
 
 Usage:
     python generate_character.py <project_name> <character_name>
+    python generate_character.py <project_name> <character_name> --ref <ref_image_path>
 
 Example:
     python generate_character.py my_novel 张三
+    python generate_character.py my_novel 张三 --ref characters/ref/actor.png
 """
 
 import argparse
 import sys
 from pathlib import Path
+from typing import Optional, List
 
 from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
-
-
-def build_character_prompt(name: str, description: str, style: str = "") -> str:
-    """
-    构建人物设计图生成 prompt
-
-    遵循 nano-banana 最佳实践：使用叙事性段落描述，而非关键词列表。
-
-    Args:
-        name: 人物名称
-        description: 人物描述（应为叙事性段落）
-        style: 项目整体风格
-
-    Returns:
-        完整的 prompt 字符串
-    """
-    style_part = f"，{style}" if style else ""
-
-    prompt = f"""人物设计参考图{style_part}。
-
-「{name}」的全身立绘。
-
-{description}
-
-构图要求：单人全身像，站立姿态自然，面向镜头。
-背景：纯净浅灰色，无任何装饰元素。
-光线：柔和均匀的摄影棚照明，无强烈阴影。
-画质：高清，细节清晰，色彩准确。"""
-
-    return prompt
+from lib.prompt_builders import build_character_prompt
 
 
 def generate_character(
     project_name: str,
-    character_name: str
+    character_name: str,
+    reference_images: Optional[List[Path]] = None
 ) -> Path:
     """
     生成人物设计图
@@ -57,6 +32,7 @@ def generate_character(
     Args:
         project_name: 项目名称
         character_name: 人物名称
+        reference_images: 参考图片路径列表（可选）
 
     Returns:
         生成的图片路径
@@ -85,11 +61,14 @@ def generate_character(
 
     print(f"🎨 正在生成人物设计图: {character_name}")
     print(f"   描述: {description[:50]}...")
+    if reference_images:
+        print(f"   参考图片: {[str(p) for p in reference_images]}")
 
     output_path, version = generator.generate_image(
         prompt=prompt,
         resource_type="characters",
         resource_id=character_name,
+        reference_images=reference_images,
         aspect_ratio="3:4"
     )
 
@@ -107,13 +86,32 @@ def main():
     parser = argparse.ArgumentParser(description='生成人物设计图')
     parser.add_argument('project', help='项目名称')
     parser.add_argument('character', help='人物名称')
+    parser.add_argument('--ref', nargs='+', help='参考图片路径（可多个）')
 
     args = parser.parse_args()
 
     try:
+        # 处理参考图片路径
+        reference_images = None
+        if args.ref:
+            pm = ProjectManager()
+            project_dir = pm.get_project_path(args.project)
+            reference_images = []
+            for ref_path in args.ref:
+                # 支持相对路径和绝对路径
+                ref_full_path = Path(ref_path)
+                if not ref_full_path.is_absolute():
+                    ref_full_path = project_dir / ref_path
+                if ref_full_path.exists():
+                    reference_images.append(ref_full_path)
+                    print(f"📎 添加参考图片: {ref_full_path}")
+                else:
+                    print(f"⚠️  参考图片不存在: {ref_full_path}")
+
         output_path = generate_character(
             args.project,
-            args.character
+            args.character,
+            reference_images=reference_images
         )
         print(f"\n🖼️  请查看生成的图片: {output_path}")
 

@@ -506,9 +506,31 @@
                                 分镜图 Prompt
                                 <span class="text-xs text-gray-500">（用于 Gemini 图像生成）</span>
                             </label>
-                            <textarea id="scene-image-prompt" rows="4"
-                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
-                                placeholder="描述场景环境、人物姿态、光线氛围..."></textarea>
+                            <div class="space-y-2">
+                                <textarea id="scene-image-scene" rows="3"
+                                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                    placeholder="Scene：场景环境、人物姿态、关键元素..."></textarea>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">镜头类型</label>
+                                        <select id="scene-image-shot-type" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                            <option value="">请选择</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">光线</label>
+                                        <input type="text" id="scene-image-lighting"
+                                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                            placeholder="Lighting：自然光/烛光/逆光...">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">氛围</label>
+                                    <input type="text" id="scene-image-ambiance"
+                                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        placeholder="Ambiance：紧张/温馨/阴森...">
+                                </div>
+                            </div>
                         </div>
                         <!-- 视频 Prompt -->
                         <div>
@@ -516,9 +538,33 @@
                                 视频 Prompt
                                 <span class="text-xs text-gray-500">（用于 Veo 视频生成）</span>
                             </label>
-                            <textarea id="scene-video-prompt" rows="4"
-                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
-                                placeholder="镜头类型 + 场景环境 + 人物动作 + 对话/音效..."></textarea>
+                            <div class="space-y-2">
+                                <textarea id="scene-video-action" rows="3"
+                                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                    placeholder="Action：人物动作、节奏、关键变化..."></textarea>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">摄像机运动</label>
+                                        <select id="scene-video-camera-motion" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                            <option value="">请选择</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">环境音效（可选）</label>
+                                        <input type="text" id="scene-video-ambiance-audio"
+                                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                            placeholder="Ambiance_Audio：风声/脚步声/器物碰撞...">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">对白（可选）</label>
+                                    <div id="scene-video-dialogue-list" class="space-y-2"></div>
+                                    <button type="button" id="scene-video-dialogue-add"
+                                        class="mt-2 px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded transition-colors">
+                                        + 添加对白
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -703,9 +749,31 @@
                                 分镜图 Prompt
                                 <span class="text-xs text-gray-500">（用于 Gemini 图像生成）</span>
                             </label>
-                            <textarea id="segment-image-prompt" rows="4"
-                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
-                                placeholder="描述场景环境、人物姿态、光线氛围..."></textarea>
+                            <div class="space-y-2">
+                                <textarea id="segment-image-scene" rows="3"
+                                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                    placeholder="Scene：场景环境、人物姿态、关键元素..."></textarea>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">镜头类型</label>
+                                        <select id="segment-image-shot-type" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                            <option value="">请选择</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">光线</label>
+                                        <input type="text" id="segment-image-lighting"
+                                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                            placeholder="Lighting：自然光/烛光/逆光...">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">氛围</label>
+                                    <input type="text" id="segment-image-ambiance"
+                                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        placeholder="Ambiance：紧张/温馨/阴森...">
+                                </div>
+                            </div>
                         </div>
 
                         <!-- 视频 Prompt -->
@@ -714,9 +782,33 @@
                                 视频 Prompt
                                 <span class="text-xs text-gray-500">（用于 Veo 视频生成）</span>
                             </label>
-                            <textarea id="segment-video-prompt" rows="4"
-                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
-                                placeholder="镜头类型 + 场景环境 + 人物动作 + 对话/音效..."></textarea>
+                            <div class="space-y-2">
+                                <textarea id="segment-video-action" rows="3"
+                                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white resize-none"
+                                    placeholder="Action：人物动作、节奏、关键变化..."></textarea>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">摄像机运动</label>
+                                        <select id="segment-video-camera-motion" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white">
+                                            <option value="">请选择</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-400 mb-1">环境音效（可选）</label>
+                                        <input type="text" id="segment-video-ambiance-audio"
+                                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                            placeholder="Ambiance_Audio：风声/脚步声/器物碰撞...">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">对白（可选）</label>
+                                    <div id="segment-video-dialogue-list" class="space-y-2"></div>
+                                    <button type="button" id="segment-video-dialogue-add"
+                                        class="mt-2 px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded transition-colors">
+                                        + 添加对白
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- 分段标记 -->
