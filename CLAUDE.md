@@ -289,10 +289,12 @@ projects/{项目名}/
 - `style`：整体视觉风格描述（不限于动漫，根据项目需要设定）
 - `overview`：**项目概述**（上传源文件后自动生成，包含故事梗概、题材类型、核心主题、世界观设定）
 - `aspect_ratio`：可选，自定义各资源的画面比例
-- `episodes`：剧集列表及状态
+- `episodes`：剧集列表（仅包含核心元数据）
 - `characters`：**人物完整定义**和设计图路径
 - `clues`：**线索完整定义**和设计图路径
-- `status`：项目当前阶段和进度统计
+
+> **注意**：`status`、`episodes[].status`、`episodes[].scenes_count` 等统计字段已改为**读时计算**，
+> 不再存储在 JSON 中。API 响应会自动注入这些计算字段。
 
 #### 数据分层原则
 
@@ -300,10 +302,27 @@ projects/{项目名}/
 |------|---------|------|
 | `project.json` | 项目概述 `overview` | `overview: {"synopsis": "...", "genre": "...", "theme": "...", "world_setting": "..."}` |
 | `project.json` | 角色/线索的**完整定义** | `characters: {"姜月茴": {"description": "...", "character_sheet": "..."}}` |
-| `scripts/episode_N.json` | 本集出现的角色/线索**名称列表** | `characters_in_episode: ["姜月茴", "裴与"]` |
-| `scenes[].xxx_in_scene` | 本场景出现的角色/线索**名称列表** | `characters_in_scene: ["姜月茴"]` |
+| `project.json` | 剧集**核心元数据** | `episodes: [{"episode": 1, "title": "...", "script_file": "..."}]` |
+| `segments[]/scenes[]` | 本片段/场景的角色/线索**名称列表** | `characters_in_segment: ["姜月茴"]` |
 
-**原则**: 角色和线索的 description、character_sheet、voice_style 等属性**只存储在 project.json**，episode 和 scene 级别仅存储引用（名称列表）。
+**原则**:
+- 角色和线索的 description、character_sheet、voice_style 等属性**只存储在 project.json**
+- 剧集的 `scenes_count`、`status`、`duration_seconds` 等统计字段由 **StatusCalculator 读时计算**
+- `characters_in_episode` 和 `clues_in_episode` 由 API 从 segments/scenes 聚合，不再存储
+
+#### 写时同步 vs 读时计算
+
+| 字段 | 存储方式 | 说明 |
+|------|---------|------|
+| `episodes[].episode` | 写时同步 | 剧本保存时自动同步 |
+| `episodes[].title` | 写时同步 | 剧本保存时自动同步 |
+| `episodes[].script_file` | 写时同步 | 剧本保存时自动同步 |
+| `episodes[].scenes_count` | 读时计算 | API 响应时由 StatusCalculator 注入 |
+| `episodes[].status` | 读时计算 | API 响应时由 StatusCalculator 注入 |
+| `status.progress` | 读时计算 | API 响应时由 StatusCalculator 注入 |
+| `status.current_phase` | 读时计算 | API 响应时由 StatusCalculator 注入 |
+| `characters_in_episode` | 读时计算 | API 响应时从 segments/scenes 聚合 |
+| `clues_in_episode` | 读时计算 | API 响应时从 segments/scenes 聚合 |
 
 #### 完整示例
 
@@ -329,9 +348,7 @@ projects/{项目名}/
     {
       "episode": 1,
       "title": "襁褓惊变",
-      "script_file": "scripts/episode_1.json",
-      "status": "draft",
-      "segments_count": 15
+      "script_file": "scripts/episode_1.json"
     }
   ],
   "characters": {
@@ -354,7 +371,10 @@ projects/{项目名}/
       "clue_sheet": "clues/玉佩.png"
     }
   },
-  "status": {...}
+  "metadata": {
+    "created_at": "2025-01-27T10:00:00Z",
+    "updated_at": "2025-01-27T12:00:00Z"
+  }
 }
 ```
 

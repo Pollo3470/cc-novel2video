@@ -11,12 +11,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from lib.project_manager import ProjectManager
+from lib.status_calculator import StatusCalculator
 
 router = APIRouter()
 
-# 初始化项目管理器
+# 初始化项目管理器和状态计算器
 project_root = Path(__file__).parent.parent.parent.parent
 pm = ProjectManager(project_root / "projects")
+calc = StatusCalculator(pm)
 
 
 class CreateProjectRequest(BaseModel):
@@ -51,13 +53,17 @@ async def list_projects():
                     if scene_images:
                         thumbnail = f"/api/v1/files/{name}/storyboards/{scene_images[0].name}"
 
+                # 使用 StatusCalculator 计算进度（读时计算）
+                progress = calc.calculate_project_progress(name)
+                current_phase = calc.calculate_current_phase(progress)
+
                 projects.append({
                     "name": name,
                     "title": project.get("title", name),
                     "style": project.get("style", ""),
                     "thumbnail": thumbnail,
-                    "progress": project.get("status", {}).get("progress", {}),
-                    "current_phase": project.get("status", {}).get("current_phase", "unknown")
+                    "progress": progress,
+                    "current_phase": current_phase
                 })
             else:
                 # 没有 project.json 的项目
@@ -102,23 +108,25 @@ async def create_project(req: CreateProjectRequest):
 
 @router.get("/projects/{name}")
 async def get_project(name: str):
-    """获取项目详情"""
+    """获取项目详情（含实时计算字段）"""
     try:
         if not pm.project_exists(name):
             raise HTTPException(status_code=404, detail=f"项目 '{name}' 不存在或未初始化")
 
         project = pm.load_project(name)
 
-        # 同步项目状态
-        project = pm.sync_project_status(name)
+        # 注入计算字段（不写入 JSON，仅用于 API 响应）
+        project = calc.enrich_project(name, project)
 
-        # 加载所有剧本
+        # 加载所有剧本并注入计算字段
         scripts = {}
         for ep in project.get("episodes", []):
             script_file = ep.get("script_file", "").replace("scripts/", "")
             if script_file:
                 try:
-                    scripts[script_file] = pm.load_script(name, script_file)
+                    script = pm.load_script(name, script_file)
+                    script = calc.enrich_script(script)
+                    scripts[script_file] = script
                 except FileNotFoundError:
                     pass
 

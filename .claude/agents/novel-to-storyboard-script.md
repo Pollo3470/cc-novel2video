@@ -318,7 +318,7 @@ model: opus
 
 9. 将生成的 JSON 保存到 `projects/{项目名}/scripts/episode_1.json`（而非 script.json）
 
-10. **验证数据完整性**：
+10. **验证并同步数据**：
    ```python
    from lib.project_manager import ProjectManager
    from lib.data_validator import validate_episode
@@ -334,6 +334,9 @@ model: opus
        # 必须修复错误后才能继续
    else:
        print("✅ 剧本验证通过")
+
+   # 同步剧集信息到 project.json（确保 WebUI 正确显示）
+   pm.sync_episode_from_script(project_name, script_filename)
    ```
 
 11. 完成后向用户报告："Step 4 分镜表已生成并保存到 scripts/episode_1.json。共包含 X 个场景。剧本已通过数据验证。您可以使用 /generate-characters 和 /generate-clues 命令继续生成人物和线索设计图。"

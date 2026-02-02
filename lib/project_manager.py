@@ -222,7 +222,50 @@ class ProjectManager:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(script, f, ensure_ascii=False, indent=2)
 
+        # 自动同步到 project.json
+        if self.project_exists(project_name) and isinstance(script.get('episode'), int):
+            self.sync_episode_from_script(project_name, filename)
+
         return output_path
+
+    def sync_episode_from_script(self, project_name: str, script_filename: str) -> Dict:
+        """
+        从剧本文件同步集数信息到 project.json
+
+        Agent 写入剧本后必须调用此方法以确保 WebUI 能正确显示剧集列表。
+
+        Args:
+            project_name: 项目名称
+            script_filename: 剧本文件名（如 episode_1.json）
+
+        Returns:
+            更新后的 project 字典
+        """
+        script = self.load_script(project_name, script_filename)
+        project = self.load_project(project_name)
+
+        episode_num = script.get('episode', 1)
+        episode_title = script.get('title', '')
+        script_file = f"scripts/{script_filename}"
+
+        # 查找或创建 episode 条目
+        episodes = project.setdefault('episodes', [])
+        episode_entry = next((ep for ep in episodes if ep['episode'] == episode_num), None)
+
+        if episode_entry is None:
+            episode_entry = {'episode': episode_num}
+            episodes.append(episode_entry)
+
+        # 同步核心元数据（不包含统计字段，统计字段由 StatusCalculator 读时计算）
+        episode_entry['title'] = episode_title
+        episode_entry['script_file'] = script_file
+
+        # 排序并保存
+        episodes.sort(key=lambda x: x['episode'])
+        self.save_project(project_name, project)
+
+        print(f"✅ 已同步剧集信息: Episode {episode_num} - {episode_title}")
+        return project
 
     def load_script(self, project_name: str, filename: str) -> Dict:
         """

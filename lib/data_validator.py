@@ -204,50 +204,32 @@ class DataValidator:
 
         content_mode = episode.get('content_mode', project.get('content_mode', 'narration'))
 
-        # 检查 characters_in_episode
+        # 注意：characters_in_episode 和 clues_in_episode 已改为读时计算
+        # 不再要求 episode 文件中必须包含这些字段
+        # 仅当存在时验证其格式
         characters_in_episode = episode.get('characters_in_episode')
-        if characters_in_episode is None:
-            errors.append("缺少必填字段: characters_in_episode")
-            characters_in_episode = []
-        elif not isinstance(characters_in_episode, list):
-            errors.append("characters_in_episode 必须是数组")
-            characters_in_episode = []
+        if characters_in_episode is not None and not isinstance(characters_in_episode, list):
+            warnings.append("characters_in_episode 应为数组（此字段已改为读时计算，可移除）")
 
-        # 验证 characters_in_episode 引用一致性
-        characters_in_episode_set = set(characters_in_episode)
-        invalid_chars = characters_in_episode_set - project_characters
-        if invalid_chars:
-            errors.append(f"characters_in_episode 引用了不存在于 project.json 的角色: {invalid_chars}")
-
-        # 检查 clues_in_episode
         clues_in_episode = episode.get('clues_in_episode')
-        if clues_in_episode is None:
-            errors.append("缺少必填字段: clues_in_episode")
-            clues_in_episode = []
-        elif not isinstance(clues_in_episode, list):
-            errors.append("clues_in_episode 必须是数组")
-            clues_in_episode = []
-
-        # 验证 clues_in_episode 引用一致性
-        clues_in_episode_set = set(clues_in_episode)
-        invalid_clues = clues_in_episode_set - project_clues
-        if invalid_clues:
-            errors.append(f"clues_in_episode 引用了不存在于 project.json 的线索: {invalid_clues}")
+        if clues_in_episode is not None and not isinstance(clues_in_episode, list):
+            warnings.append("clues_in_episode 应为数组（此字段已改为读时计算，可移除）")
 
         # 根据 content_mode 验证 segments 或 scenes
+        # 直接使用 project 级别的 characters 和 clues 进行引用验证
         if content_mode == 'narration':
             self._validate_segments(
                 episode.get('segments', []),
-                characters_in_episode_set,
-                clues_in_episode_set,
+                project_characters,  # 直接使用 project 级别
+                project_clues,
                 errors,
                 warnings
             )
         else:  # drama
             self._validate_scenes(
                 episode.get('scenes', []),
-                characters_in_episode_set,
-                clues_in_episode_set,
+                project_characters,  # 直接使用 project 级别
+                project_clues,
                 errors,
                 warnings
             )
@@ -301,7 +283,7 @@ class DataValidator:
             else:
                 invalid = set(chars_in_segment) - characters_in_episode
                 if invalid:
-                    errors.append(f"{prefix}: characters_in_segment 引用了不在 characters_in_episode 中的角色: {invalid}")
+                    errors.append(f"{prefix}: characters_in_segment 引用了不存在于 project.json 的角色: {invalid}")
 
             # clues_in_segment
             clues_in_segment = segment.get('clues_in_segment')
@@ -312,7 +294,7 @@ class DataValidator:
             else:
                 invalid = set(clues_in_segment) - clues_in_episode
                 if invalid:
-                    errors.append(f"{prefix}: clues_in_segment 引用了不在 clues_in_episode 中的线索: {invalid}")
+                    errors.append(f"{prefix}: clues_in_segment 引用了不存在于 project.json 的线索: {invalid}")
 
             # image_prompt 和 video_prompt（新格式，符合 CLAUDE.md 规范）
             if not segment.get('image_prompt'):
@@ -366,7 +348,7 @@ class DataValidator:
             else:
                 invalid = set(chars_in_scene) - characters_in_episode
                 if invalid:
-                    errors.append(f"{prefix}: characters_in_scene 引用了不在 characters_in_episode 中的角色: {invalid}")
+                    errors.append(f"{prefix}: characters_in_scene 引用了不存在于 project.json 的角色: {invalid}")
 
             # clues_in_scene
             clues_in_scene = scene.get('clues_in_scene')
@@ -377,7 +359,7 @@ class DataValidator:
             else:
                 invalid = set(clues_in_scene) - clues_in_episode
                 if invalid:
-                    errors.append(f"{prefix}: clues_in_scene 引用了不在 clues_in_episode 中的线索: {invalid}")
+                    errors.append(f"{prefix}: clues_in_scene 引用了不存在于 project.json 的线索: {invalid}")
 
             # image_prompt 和 video_prompt（新格式，符合 CLAUDE.md 规范）
             if not scene.get('image_prompt'):
