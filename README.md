@@ -88,9 +88,8 @@ claude
 ai-anime/
 ├── .claude/
 │   ├── agents/                # Claude Agents
-│   │   ├── novel-to-storyboard-script.md  # 小说→分镜剧本 Agent
-│   │   └── references/        # Agent 引用文档
-│   │       └── script_format.md  # 分镜剧本格式规范
+│   │   ├── novel-to-narration-script.md   # 小说→说书剧本 Agent（默认）
+│   │   └── novel-to-storyboard-script.md  # 小说→分镜剧本 Agent
 │   └── skills/                # Claude Code Skills
 │   ├── generate-characters/  # 生成人物设计图
 │   ├── generate-storyboard/  # 生成分镜图片
@@ -299,11 +298,6 @@ Veo 视频生成通常需要 1-6 分钟，高峰期可能更长。请耐心等�
 ```bash
 ffmpeg -version  # 应该显示版本信息
 ```
-
-## 📄 分镜剧本格式
-
-剧本使用 JSON 格式存储，完整格式参考：
-`.claude/agents/references/script_format.md`
 
 ## 🎯 最佳实践
 

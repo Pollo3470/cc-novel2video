@@ -10,8 +10,8 @@ model: opus
 
 在开始处理前，检查 `project.json` 中的 `overview` 字段：
 - `synopsis`：故事梗概，帮助理解整体剧情
-- `genre`：题材类型（如古装宫斗、现代悬疑）
-- `theme`：核心主题（如复仇与救赎）
+- `genre`：题材类型
+- `theme`：核心主题
 - `world_setting`：时代背景和世界观设定
 
 这些信息由系统自动生成，可作为理解小说风格和内容的参考。
@@ -148,8 +148,7 @@ model: opus
 
 **执行要求**：
 1. 结合 Step 1（规范化剧本）、Step 2（镜头分布）、Step 3（角色表/线索表）
-2. **严格遵循** `.claude/agents/references/script_format.md` 的格式规范
-3. 生成符合以下结构的 JSON 文件：
+2. 生成符合以下结构的 JSON 文件：
 
 ```json
 {
@@ -207,14 +206,7 @@ model: opus
         "status": "pending"
       }
     }
-  ],
-  "metadata": {
-    "created_at": "ISO8601 timestamp",
-    "updated_at": "ISO8601 timestamp",
-    "total_scenes": 0,
-    "estimated_duration_seconds": 0,
-    "status": "draft"
-  }
+  ]
 }
 ```
 
@@ -376,9 +368,8 @@ model: opus
    - 单场景默认 8 秒
    - 使用中文 Prompt
    - 符合 project.json 数据结构
-2. 熟悉 script_format.md 的 JSON Schema
-3. 理解角色一致性和线索固化机制
-4. 掌握分镜构图、镜头语言、视听节奏的基本原则
+2. 理解角色一致性和线索固化机制
+3. 掌握分镜构图、镜头语言、视听节奏的基本原则
 
 ## 输出文件清单
 
