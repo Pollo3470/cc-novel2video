@@ -84,12 +84,16 @@ async def restore_version(
         # 确定当前文件路径
         if resource_type == "storyboards":
             current_file = project_path / "storyboards" / f"scene_{resource_id}.png"
+            file_path = f"storyboards/scene_{resource_id}.png"
         elif resource_type == "videos":
             current_file = project_path / "videos" / f"scene_{resource_id}.mp4"
+            file_path = f"videos/scene_{resource_id}.mp4"
         elif resource_type == "characters":
             current_file = project_path / "characters" / f"{resource_id}.png"
+            file_path = f"characters/{resource_id}.png"
         elif resource_type == "clues":
             current_file = project_path / "clues" / f"{resource_id}.png"
+            file_path = f"clues/{resource_id}.png"
         else:
             raise HTTPException(status_code=400, detail=f"不支持的资源类型: {resource_type}")
 
@@ -101,9 +105,38 @@ async def restore_version(
             current_file=current_file
         )
 
+        # 同步元数据，确保引用指向统一的 PNG（避免 jpg/png 不一致导致 UI 仍显示旧图）
+        if resource_type == "characters":
+            try:
+                pm.update_project_character_sheet(project_name, resource_id, file_path)
+            except KeyError:
+                pass
+        elif resource_type == "clues":
+            try:
+                pm.update_clue_sheet(project_name, resource_id, file_path)
+            except KeyError:
+                pass
+        elif resource_type == "storyboards":
+            scripts_dir = project_path / "scripts"
+            if scripts_dir.exists():
+                for script_file in scripts_dir.glob("*.json"):
+                    try:
+                        pm.update_scene_asset(
+                            project_name=project_name,
+                            script_filename=script_file.name,
+                            scene_id=resource_id,
+                            asset_type="storyboard_image",
+                            asset_path=file_path,
+                        )
+                    except KeyError:
+                        continue
+                    except Exception:
+                        continue
+
         return {
             "success": True,
-            **result
+            **result,
+            "file_path": file_path,
         }
 
     except ValueError as e:

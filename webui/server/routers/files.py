@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Body
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from lib.project_manager import ProjectManager
+from lib.image_utils import convert_image_bytes_to_png
 
 router = APIRouter()
 
@@ -61,9 +62,9 @@ async def upload_file(
 
     Args:
         project_name: 项目名称
-        upload_type: 上传类型 (source/character/clue)
+        upload_type: 上传类型 (source/character/clue/storyboard)
         file: 上传的文件
-        name: 可选，用于人物/线索名称（自动更新元数据）
+        name: 可选，用于人物/线索名称，或分镜 ID（自动更新元数据）
     """
     if upload_type not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"无效的上传类型: {upload_type}")
@@ -85,11 +86,24 @@ async def upload_file(
             filename = file.filename
         elif upload_type == "character":
             target_dir = project_dir / "characters"
-            # 使用提供的名称或原文件名
-            filename = f"{name}{ext}" if name else file.filename
+            # 统一保存为 PNG，且使用稳定文件名（避免 jpg/png 不一致导致版本还原/引用异常）
+            if name:
+                filename = f"{name}.png"
+            else:
+                filename = f"{Path(file.filename).stem}.png"
         elif upload_type == "clue":
             target_dir = project_dir / "clues"
-            filename = f"{name}{ext}" if name else file.filename
+            if name:
+                filename = f"{name}.png"
+            else:
+                filename = f"{Path(file.filename).stem}.png"
+        elif upload_type == "storyboard":
+            # 注意：目录为 storyboards（复数），而不是 storyboard
+            target_dir = project_dir / "storyboards"
+            if name:
+                filename = f"scene_{name}.png"
+            else:
+                filename = f"{Path(file.filename).stem}.png"
         else:
             target_dir = project_dir / upload_type
             filename = file.filename
@@ -97,13 +111,28 @@ async def upload_file(
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / filename
 
-        # 保存文件
+        # 保存文件（图片统一转 PNG）
         content = await file.read()
+        if upload_type in ("character", "clue", "storyboard"):
+            try:
+                content = convert_image_bytes_to_png(content)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="无效的图片文件，无法解析")
+
         with open(target_path, "wb") as f:
             f.write(content)
 
         # 更新元数据
-        relative_path = f"{upload_type}s/{filename}" if upload_type != "source" else f"source/{filename}"
+        if upload_type == "source":
+            relative_path = f"source/{filename}"
+        elif upload_type == "character":
+            relative_path = f"characters/{filename}"
+        elif upload_type == "clue":
+            relative_path = f"clues/{filename}"
+        elif upload_type == "storyboard":
+            relative_path = f"storyboards/{filename}"
+        else:
+            relative_path = f"{upload_type}/{filename}"
 
         if upload_type == "character" and name:
             try:
@@ -390,4 +419,3 @@ async def delete_draft(project_name: str, episode: int, step_num: int):
 
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
-

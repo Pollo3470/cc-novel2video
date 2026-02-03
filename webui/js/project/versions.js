@@ -282,12 +282,25 @@ async function restoreSegmentVersion(resourceType, segmentId) {
   if (!confirm(`确定要还原到 v${selectedVersion} 吗？`)) return;
 
   try {
-    await API.restoreVersion(state.projectName, resourceType, segmentId, selectedVersion);
+    const result = await API.restoreVersion(state.projectName, resourceType, segmentId, selectedVersion);
 
     // 刷新
     state.cacheBuster = Date.now();
     const scriptFile = document.getElementById("segment-script-file").value;
     await initSegmentVersionControls(segmentId, scriptFile, true, true);
+
+    // 更新预览（避免仍显示手动上传的图片/旧缓存）
+    if (result?.file_path) {
+      const url = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
+      if (resourceType === "storyboards") {
+        document.getElementById("segment-storyboard").innerHTML = `
+            <div class="relative group w-full h-full">
+                <img src="${url}" class="w-full h-full object-cover cursor-pointer" onclick="openLightbox('${url}', '分镜图 ${segmentId}')">
+            </div>`;
+      } else {
+        document.getElementById("segment-video").innerHTML = `<video src="${url}" controls class="w-full h-full"></video>`;
+      }
+    }
 
     alert(`已还原到 v${selectedVersion}`);
   } catch (error) {
@@ -431,10 +444,20 @@ async function restoreSceneVersion(resourceType, sceneId) {
   if (!confirm(`确定要还原到 v${selectedVersion} 吗？`)) return;
 
   try {
-    await API.restoreVersion(state.projectName, resourceType, sceneId, selectedVersion);
+    const result = await API.restoreVersion(state.projectName, resourceType, sceneId, selectedVersion);
     state.cacheBuster = Date.now();
     const scriptFile = document.getElementById("scene-script-file").value;
     await initSceneVersionControls(sceneId, scriptFile, true, true);
+
+    if (result?.file_path) {
+      const url = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
+      if (resourceType === "storyboards") {
+        document.getElementById("scene-storyboard").innerHTML = `<div class="relative group w-full h-full"><img src="${url}" class="w-full h-full object-contain cursor-pointer" onclick="openLightbox('${url}', '分镜图 ${sceneId}')"></div>`;
+      } else {
+        document.getElementById("scene-video").innerHTML = `<video src="${url}" controls class="w-full h-full"></video>`;
+      }
+    }
+
     alert(`已还原到 v${selectedVersion}`);
   } catch (error) {
     alert("还原失败: " + error.message);
@@ -527,6 +550,11 @@ async function restoreCharacterVersion(charName) {
     document.getElementById("char-description").value = result.prompt || "";
     state.cacheBuster = Date.now();
     await initCharacterVersionControls(charName, true);
+    if (result?.file_path) {
+      const previewEl = document.getElementById("char-image-preview");
+      previewEl.querySelector("img").src = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
+      previewEl.classList.remove("hidden");
+    }
     alert(`已还原到 v${selectedVersion}`);
   } catch (error) {
     alert("还原失败: " + error.message);
@@ -619,9 +647,13 @@ async function restoreClueVersion(clueName) {
     document.getElementById("clue-description").value = result.prompt || "";
     state.cacheBuster = Date.now();
     await initClueVersionControls(clueName, true);
+    if (result?.file_path) {
+      const previewEl = document.getElementById("clue-image-preview");
+      previewEl.querySelector("img").src = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
+      previewEl.classList.remove("hidden");
+    }
     alert(`已还原到 v${selectedVersion}`);
   } catch (error) {
     alert("还原失败: " + error.message);
   }
 }
-
