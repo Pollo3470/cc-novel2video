@@ -266,6 +266,17 @@ VERTEX_GCS_BUCKET=your-bucket-name
 - **图片生成**：`gemini-3-pro-image-preview`
 - **视频生成**：`veo-3.1-generate-preview`
 
+### Veo 3.1 API 限制
+
+| 后端 | 分辨率 | 支持时长 | 说明 |
+|------|--------|----------|------|
+| AI Studio | 720p | 4s / 6s / 8s | 720p 支持所有时长 |
+| AI Studio | 1080p | 8s | 1080p 仅支持 8 秒 |
+| Vertex AI | 720p | 4s / 6s / 8s | 720p 支持所有时长 |
+| Vertex AI | 1080p | 4s / 6s / 8s | **1080p 支持所有时长** |
+
+> **推荐**：如需生成 **1080p + 4 秒**短视频，请使用 **Vertex AI 后端**。
+
 ## 🔧 常见问题
 
 ### Q: API 调用失败？

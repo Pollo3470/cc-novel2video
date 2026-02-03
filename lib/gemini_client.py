@@ -607,7 +607,7 @@ class GeminiClient:
         # 配置参数
         aspect_ratio: str = "9:16",
         duration_seconds: str = "8",
-        resolution: str = "720p",
+        resolution: str = "1080p",
         negative_prompt: str = "music, BGM, background music, subtitles, low quality",
         output_path: Optional[Union[str, Path]] = None,
         output_gcs_uri: Optional[str] = None,
@@ -751,11 +751,16 @@ class GeminiClient:
             # 准备起始帧
             image_param = self._prepare_image_param(start_image)
 
+            # 使用 source 参数传入 prompt 和 image
+            source = self.types.GenerateVideosSource(
+                prompt=prompt,
+                image=image_param,
+            )
+
             # 调用 API
             operation = self.client.models.generate_videos(
                 model=self.VIDEO_MODEL,
-                prompt=prompt,
-                image=image_param,
+                source=source,
                 config=config
             )
 
@@ -910,7 +915,7 @@ class GeminiClient:
         # 配置参数
         aspect_ratio: str = "9:16",
         duration_seconds: str = "8",
-        resolution: str = "720p",
+        resolution: str = "1080p",
         negative_prompt: str = "music, BGM, background music, subtitles, low quality",
         output_path: Optional[Union[str, Path]] = None,
         output_gcs_uri: Optional[str] = None,
@@ -1014,11 +1019,16 @@ class GeminiClient:
             # 准备起始帧
             image_param = self._prepare_image_param(start_image)
 
+            # 使用 source 参数传入 prompt 和 image
+            source = self.types.GenerateVideosSource(
+                prompt=prompt,
+                image=image_param,
+            )
+
             # 调用异步 API
             operation = await self.client.aio.models.generate_videos(
                 model=self.VIDEO_MODEL,
-                prompt=prompt,
-                image=image_param,
+                source=source,
                 config=config
             )
 

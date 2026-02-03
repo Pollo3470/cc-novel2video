@@ -7,20 +7,14 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
 
 完整的端到端工作流程，将小说转换为视频。
 
-## 快速开始
+## 内容模式
 
-```
-/manga-workflow
-```
+系统支持两种内容模式，通过 `project.json` 中的 `content_mode` 字段切换：
 
-这将引导你完成整个流程：
-1. 小说 → 剧本
-2. 剧本 → 确认线索（重要物品/环境）
-3. 剧本 → 人物设计
-4. 线索 → 线索设计图
-5. 人物+线索 → 多宫格分镜图（16:9）
-6. 分镜 → 视频片段（16:9 横屏，8 秒）
-7. 片段 → 最终视频
+| 模式 | content_mode | 画面比例 | 默认时长 | Agent |
+|------|-------------|---------|---------|-------|
+| **说书+画面（默认）** | `narration` | 9:16 竖屏 | 4 秒 | novel-to-narration-script |
+| 剧集动画 | `drama` | 16:9 横屏 | 8 秒 | novel-to-storyboard-script |
 
 ## 工作流决策树
 
@@ -32,58 +26,90 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
   │   1. 创建项目目录            │
   │   2. 将小说复制到 source/    │
   │   3. 创建 project.json       │
+  │   4. 选择 content_mode       │
   │   └─────────────────────────┘
   │
   ├─ 检查项目状态 (project.json)
   │   │
-  │   ├─ 没有剧本？ ────────► 调用 novel-to-storyboard-script agent ──► 审核 ──┐
-  │   │                                                              │
+  │   ├─ 没有剧本？
+  │   │   ├─ narration 模式 → novel-to-narration-script agent（3 步）
+  │   │   └─ drama 模式 → novel-to-storyboard-script agent（4 步）
+  │   │   └─► 审核 ──┐
+  │   │
   │   ├─ 没有确认线索？ ───► 确认 clues 列表 ──► 更新 project.json ──┐
-  │   │                                                              │
+  │   │
   │   ├─ 没有人物设计？ ────► /generate-characters ──► 审核 ──┐
-  │   │                                                       │
+  │   │
   │   ├─ 没有线索设计？ ────► /generate-clues ──► 审核 ──┐
-  │   │                                                   │
+  │   │
   │   ├─ 没有分镜图？ ──────► /generate-storyboard ──► 审核 ──┐
-  │   │                                                        │
+  │   │
   │   ├─ 没有视频？ ────────► /generate-video ──► 审核 ──┐
-  │   │                                                   │
+  │   │
   │   └─ 准备合成？ ───────► /compose-video ──► 完成！
 ```
 
-> **项目概述**：上传源文件后，系统会自动分析小说内容并生成项目概述（故事梗概、题材类型、核心主题、世界观设定）。概述信息会保存到 `project.json` 的 `overview` 字段，供后续 Agent 参考，也便于用户在 WebUI 中快速了解项目。
+> **项目概述**：上传源文件后，系统会自动分析小说内容并生成项目概述（故事梗概、题材类型、核心主题、世界观设定）。概述信息会保存到 `project.json` 的 `overview` 字段，供后续 Agent 参考。
 
 ## 阶段 1：项目设置
 
-新项目：
+**新项目**：
 1. 询问项目名称
-2. 创建 `projects/{名称}/` 及子目录（含 `clues/`）
+2. 创建 `projects/{名称}/` 及子目录（含 `clues/`、`drafts/`）
 3. 创建 `project.json` 初始文件
-4. 请用户将小说文本放入 `source/`
-5. **上传后自动生成项目概述**（synopsis、genre、theme、world_setting）
+4. **询问内容模式**：`narration`（默认）或 `drama`
+5. 请用户将小说文本放入 `source/`
+6. **上传后自动生成项目概述**（synopsis、genre、theme、world_setting）
 
-现有项目：
+**现有项目**：
 1. 列出 `projects/` 中的项目
 2. 显示 `project.json` 中的项目状态
 3. 从上次未完成的阶段继续
 
 ## 阶段 2：剧本创建
 
-使用 Task 工具调用 `novel-to-storyboard-script` agent（使用 Opus 模型）：
-- Agent 会执行严格的四步流程：
-  1. 规范化剧本（结构化整理）
-  2. 镜头预算（场景复杂度分析）
-  3. 角色表/线索表（详细描述生成）
-  4. 分镜表（最终 JSON 输出）
-- 每一步都需要用户确认后才继续
-- **Agent 会自动识别重要线索**（反复出现的重要物品和地点）
+根据 `content_mode` 调用不同的 Agent（使用 Opus 模型）：
 
-**审核检查点**：在 Agent 完成 Step 4 后，展示剧本摘要和线索列表，等待确认。
+### 说书+画面模式（narration）
+
+使用 Task 工具调用 `novel-to-narration-script` agent：
+- **核心原则**：保留原文，不改编、不删减、不添加
+- **三步流程**：
+  1. **片段拆分**：按朗读节奏拆分为约 4 秒的片段，标记 `segment_break`
+  2. **角色表/线索表**：生成详细描述，同步到 `project.json`
+  3. **生成 JSON**：输出 `segments` 结构剧本
+- 每一步都需要用户确认后才继续
+- **视频 Prompt 仅包含角色对话**，不包含旁白（旁白由后期人工配音）
+
+**输出**：
+- `drafts/episode_{N}/step1_segments.md`
+- `drafts/episode_{N}/step2_character_clue_tables.md`
+- `scripts/episode_N.json`（使用 `segments` 数组）
+
+### 剧集动画模式（drama）
+
+使用 Task 工具调用 `novel-to-storyboard-script` agent：
+- **核心原则**：将小说改编为剧本形式
+- **四步流程**：
+  1. **规范化剧本**：结构化整理
+  2. **镜头预算**：场景复杂度分析，标记 `segment_break`
+  3. **角色表/线索表**：生成详细描述，同步到 `project.json`
+  4. **分镜表**：输出 `scenes` 结构剧本
+- 每一步都需要用户确认后才继续
+- **视频 Prompt 包含对话、旁白、音效**
+
+**输出**：
+- `drafts/episode_{N}/step1_normalized_script.md`
+- `drafts/episode_{N}/step2_shot_budget.md`
+- `drafts/episode_{N}/step3_character_clue_tables.md`
+- `scripts/episode_N.json`（使用 `scenes` 数组）
+
+**审核检查点**：Agent 完成后，展示剧本摘要和线索列表，等待确认。
 
 **数据分层说明**：
 - Agent 会将角色和线索的**完整定义**同步到 `project.json`
-- `episode_N.json` 只保留 `characters_in_episode` 和 `clues_in_episode` 名称列表
-- 后续 skills（generate-characters、generate-storyboard）从 `project.json` 读取角色信息
+- 剧本只保留 `characters_in_segment/scene` 和 `clues_in_segment/scene` 名称列表
+- 后续 skills 从 `project.json` 读取角色/线索信息
 
 ## 阶段 3：线索确认
 
@@ -98,7 +124,7 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
 ## 阶段 4：人物设计
 
 调用 `/generate-characters`：
-- 根据描述生成人物设计图
+- 根据描述生成人物设计图（**3:4 竖版**，三视图）
 - 保存到 `characters/`
 - 更新 `project.json`
 
@@ -107,7 +133,7 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
 ## 阶段 5：线索设计
 
 调用 `/generate-clues`：
-- 为 `importance='major'` 的线索生成设计图
+- 为 `importance='major'` 的线索生成设计图（**16:9 横屏**）
 - 保存到 `clues/`
 - 更新 `project.json`
 
@@ -116,7 +142,12 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
 ## 阶段 6：分镜图生成
 
 调用 `/generate-storyboard`：
-- 生成多宫格分镜图（16:9 横屏）
+
+| 模式 | 流程 | 画面比例 |
+|------|------|---------|
+| narration | 直接生成分镜图 | **9:16 竖屏** |
+| drama | 两步：多宫格 → 单独场景图 | 16:9 横屏 |
+
 - **使用人物和线索参考图保持一致性**
 - 保存到 `storyboards/`
 
@@ -125,8 +156,16 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
 ## 阶段 7：视频生成
 
 调用 `/generate-video`：
-- 生成带音频的视频片段（16:9 横屏，默认 8 秒）
-- 保存到 `videos/`
+
+| 模式 | 画面比例 | 默认时长 | Prompt 内容 |
+|------|---------|---------|------------|
+| narration | **9:16 竖屏** | 4 秒 | 仅对话，无旁白 |
+| drama | 16:9 横屏 | 8 秒 | 对话 + 旁白 + 音效 |
+
+- 每个片段/场景独立生成，使用分镜图作为起始帧
+- 自动使用 ffmpeg 拼接成完整视频
+- 保存到 `videos/` 和 `output/`
+- 支持断点续传（`--resume`）
 
 **审核检查点**：预览每个视频，允许重新生成。
 
@@ -134,8 +173,9 @@ description: 完整的端到端工作流程，将小说转换为视频。使用�
 
 调用 `/compose-video`：
 - 拼接所有视频片段
-- 应用转场效果
+- 应用转场效果（使用 `segment_break` 标记）
 - 添加背景音乐（可选）
+- **narration 模式**：合并人工配音的旁白
 - 输出到 `output/`
 
 ## 项目状态命令
@@ -157,13 +197,14 @@ pm.sync_project_status("my_project")
 
 ### 在场景中使用线索
 
-在剧本场景中添加 `clues_in_scene` 字段：
+在剧本中添加 `clues_in_segment` 或 `clues_in_scene` 字段：
 ```json
 {
-  "scene_id": "E1S3",
-  "characters_in_scene": ["姜月茴"],
-  "clues_in_scene": ["玉佩", "老槐树"],
-  "visual": { ... }
+  "segment_id": "E1S3",
+  "characters_in_segment": ["姜月茴"],
+  "clues_in_segment": ["玉佩", "老槐树"],
+  "image_prompt": { ... },
+  "video_prompt": { ... }
 }
 ```
 
@@ -186,5 +227,5 @@ pm.add_clue(
 工作流可以中断后恢复：
 - 所有进度保存到磁盘
 - `project.json` 记录项目整体状态
-- 剧本 JSON 记录每个场景的生成资源
+- 剧本 JSON 记录每个片段/场景的生成资源
 - 再次运行 `/manga-workflow` 即可继续
