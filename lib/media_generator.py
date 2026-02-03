@@ -17,6 +17,7 @@ from PIL import Image
 
 from lib.gemini_client import GeminiClient, RateLimiter
 from lib.version_manager import VersionManager
+from lib.usage_tracker import UsageTracker
 
 
 class MediaGenerator:
@@ -47,8 +48,13 @@ class MediaGenerator:
             rate_limiter: 可选的限流器实例
         """
         self.project_path = Path(project_path)
+        self.project_name = self.project_path.name
         self.gemini = GeminiClient(rate_limiter=rate_limiter)
         self.versions = VersionManager(project_path)
+
+        # 初始化 UsageTracker（全局数据库，存放在 projects 目录下）
+        db_path = self.project_path.parent / ".api_usage.db"
+        self.usage_tracker = UsageTracker(db_path)
 
     def _get_output_path(self, resource_type: str, resource_id: str) -> Path:
         """
@@ -118,16 +124,42 @@ class MediaGenerator:
                 **version_metadata
             )
 
-        # 2. 调用 GeminiClient 生成新文件
-        self.gemini.generate_image(
+        # 2. 记录 API 调用开始
+        call_id = self.usage_tracker.start_call(
+            project_name=self.project_name,
+            call_type="image",
+            model=self.gemini.IMAGE_MODEL,
             prompt=prompt,
-            reference_images=reference_images,
+            resolution=image_size,
             aspect_ratio=aspect_ratio,
-            image_size=image_size,
-            output_path=output_path
         )
 
-        # 3. 记录新版本
+        try:
+            # 3. 调用 GeminiClient 生成新文件
+            self.gemini.generate_image(
+                prompt=prompt,
+                reference_images=reference_images,
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
+                output_path=output_path
+            )
+
+            # 4. 记录调用成功
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="success",
+                output_path=str(output_path),
+            )
+        except Exception as e:
+            # 记录调用失败
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="failed",
+                error_message=str(e),
+            )
+            raise
+
+        # 5. 记录新版本
         new_version = self.versions.add_version(
             resource_type=resource_type,
             resource_id=resource_id,
@@ -178,16 +210,42 @@ class MediaGenerator:
                 **version_metadata
             )
 
-        # 2. 调用 GeminiClient 异步生成新文件
-        await self.gemini.generate_image_async(
+        # 2. 记录 API 调用开始
+        call_id = self.usage_tracker.start_call(
+            project_name=self.project_name,
+            call_type="image",
+            model=self.gemini.IMAGE_MODEL,
             prompt=prompt,
-            reference_images=reference_images,
+            resolution=image_size,
             aspect_ratio=aspect_ratio,
-            image_size=image_size,
-            output_path=output_path
         )
 
-        # 3. 记录新版本
+        try:
+            # 3. 调用 GeminiClient 异步生成新文件
+            await self.gemini.generate_image_async(
+                prompt=prompt,
+                reference_images=reference_images,
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
+                output_path=output_path
+            )
+
+            # 4. 记录调用成功
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="success",
+                output_path=str(output_path),
+            )
+        except Exception as e:
+            # 记录调用失败
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="failed",
+                error_message=str(e),
+            )
+            raise
+
+        # 5. 记录新版本
         new_version = self.versions.add_version(
             resource_type=resource_type,
             resource_id=resource_id,
@@ -242,18 +300,51 @@ class MediaGenerator:
                 **version_metadata
             )
 
-        # 2. 调用 GeminiClient 生成新视频
-        _, video_ref, video_uri = self.gemini.generate_video(
+        # 2. 记录 API 调用开始
+        try:
+            duration_int = int(duration_seconds) if duration_seconds else 8
+        except (ValueError, TypeError):
+            duration_int = 8
+
+        call_id = self.usage_tracker.start_call(
+            project_name=self.project_name,
+            call_type="video",
+            model=self.gemini.VIDEO_MODEL,
             prompt=prompt,
-            start_image=start_image,
-            aspect_ratio=aspect_ratio,
-            duration_seconds=duration_seconds,
             resolution=resolution,
-            negative_prompt=negative_prompt,
-            output_path=output_path
+            duration_seconds=duration_int,
+            aspect_ratio=aspect_ratio,
+            generate_audio=True,
         )
 
-        # 3. 记录新版本
+        try:
+            # 3. 调用 GeminiClient 生成新视频
+            _, video_ref, video_uri = self.gemini.generate_video(
+                prompt=prompt,
+                start_image=start_image,
+                aspect_ratio=aspect_ratio,
+                duration_seconds=duration_seconds,
+                resolution=resolution,
+                negative_prompt=negative_prompt,
+                output_path=output_path
+            )
+
+            # 4. 记录调用成功
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="success",
+                output_path=str(output_path),
+            )
+        except Exception as e:
+            # 记录调用失败
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="failed",
+                error_message=str(e),
+            )
+            raise
+
+        # 5. 记录新版本
         new_version = self.versions.add_version(
             resource_type=resource_type,
             resource_id=resource_id,
@@ -308,18 +399,51 @@ class MediaGenerator:
                 **version_metadata
             )
 
-        # 2. 调用 GeminiClient 异步生成新视频
-        _, video_ref, video_uri = await self.gemini.generate_video_async(
+        # 2. 记录 API 调用开始
+        try:
+            duration_int = int(duration_seconds) if duration_seconds else 8
+        except (ValueError, TypeError):
+            duration_int = 8
+
+        call_id = self.usage_tracker.start_call(
+            project_name=self.project_name,
+            call_type="video",
+            model=self.gemini.VIDEO_MODEL,
             prompt=prompt,
-            start_image=start_image,
-            aspect_ratio=aspect_ratio,
-            duration_seconds=duration_seconds,
             resolution=resolution,
-            negative_prompt=negative_prompt,
-            output_path=output_path
+            duration_seconds=duration_int,
+            aspect_ratio=aspect_ratio,
+            generate_audio=True,
         )
 
-        # 3. 记录新版本
+        try:
+            # 3. 调用 GeminiClient 异步生成新视频
+            _, video_ref, video_uri = await self.gemini.generate_video_async(
+                prompt=prompt,
+                start_image=start_image,
+                aspect_ratio=aspect_ratio,
+                duration_seconds=duration_seconds,
+                resolution=resolution,
+                negative_prompt=negative_prompt,
+                output_path=output_path
+            )
+
+            # 4. 记录调用成功
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="success",
+                output_path=str(output_path),
+            )
+        except Exception as e:
+            # 记录调用失败
+            self.usage_tracker.finish_call(
+                call_id=call_id,
+                status="failed",
+                error_message=str(e),
+            )
+            raise
+
+        # 5. 记录新版本
         new_version = self.versions.add_version(
             resource_type=resource_type,
             resource_id=resource_id,

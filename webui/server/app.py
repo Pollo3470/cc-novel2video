@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from webui.server.routers import projects, characters, clues, files, generate, versions
+from webui.server.routers import projects, characters, clues, files, generate, versions, usage
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -43,6 +43,7 @@ app.include_router(clues.router, prefix="/api/v1", tags=["线索管理"])
 app.include_router(files.router, prefix="/api/v1", tags=["文件管理"])
 app.include_router(generate.router, prefix="/api/v1", tags=["生成"])
 app.include_router(versions.router, prefix="/api/v1", tags=["版本管理"])
+app.include_router(usage.router, prefix="/api/v1", tags=["费用统计"])
 
 # 静态文件服务 - 前端页面
 webui_dir = Path(__file__).parent.parent
@@ -60,6 +61,12 @@ async def serve_index():
 async def serve_project():
     """服务项目详情页"""
     return FileResponse(webui_dir / "project.html")
+
+
+@app.get("/usage.html", include_in_schema=False)
+async def serve_usage():
+    """服务费用统计页"""
+    return FileResponse(webui_dir / "usage.html")
 
 
 @app.get("/health")

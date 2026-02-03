@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>费用统计 - 视频项目管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            900: '#0f0f0f',
+                            800: '#1a1a1a',
+                            700: '#2a2a2a',
+                            600: '#3a3a3a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- 顶部导航 -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <a href="/" class="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+                        <svg class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <h1 class="text-xl font-bold">视频项目管理</h1>
+                    </a>
+                    <span class="text-gray-500">/</span>
+                    <span class="text-gray-300">费用统计</span>
+                </div>
+
+                <!-- 刷新按钮 -->
+                <button id="refresh-btn" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="刷新">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            <!-- 总费用 -->
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">总费用</div>
+                <div class="text-2xl font-bold text-green-400" id="stat-cost">$0.00</div>
+            </div>
+            <!-- 图片调用 -->
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">图片生成</div>
+                <div class="text-2xl font-bold text-blue-400" id="stat-image">0</div>
+            </div>
+            <!-- 视频调用 -->
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">视频生成</div>
+                <div class="text-2xl font-bold text-purple-400" id="stat-video">0</div>
+            </div>
+            <!-- 总调用 -->
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">总调用次数</div>
+                <div class="text-2xl font-bold text-white" id="stat-total">0</div>
+            </div>
+            <!-- 失败次数 -->
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">失败次数</div>
+                <div class="text-2xl font-bold text-red-400" id="stat-failed">0</div>
+            </div>
+        </div>
+
+        <!-- 筛选器 -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 mb-6">
+            <div class="flex flex-wrap gap-4 items-end">
+                <!-- 项目筛选 -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">项目</label>
+                    <select id="filter-project" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white min-w-[150px]">
+                        <option value="">全部项目</option>
+                    </select>
+                </div>
+                <!-- 类型筛选 -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">类型</label>
+                    <select id="filter-type" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                        <option value="">全部</option>
+                        <option value="image">图片</option>
+                        <option value="video">视频</option>
+                    </select>
+                </div>
+                <!-- 状态筛选 -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">状态</label>
+                    <select id="filter-status" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                        <option value="">全部</option>
+                        <option value="success">成功</option>
+                        <option value="failed">失败</option>
+                    </select>
+                </div>
+                <!-- 日期筛选 -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">开始日期</label>
+                    <input type="date" id="filter-start-date" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">结束日期</label>
+                    <input type="date" id="filter-end-date" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                </div>
+                <!-- 筛选按钮 -->
+                <button id="apply-filter-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                    应用筛选
+                </button>
+                <button id="reset-filter-btn" class="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors">
+                    重置
+                </button>
+            </div>
+        </div>
+
+        <!-- 调用记录表格 -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">时间</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">项目</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">类型</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">状态</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">分辨率</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">时长</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">耗时</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-300">费用</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calls-table-body" class="divide-y divide-gray-700">
+                        <!-- 数据行将通过 JS 动态插入 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页 -->
+            <div class="flex items-center justify-between px-4 py-3 border-t border-gray-700">
+                <div class="text-sm text-gray-400">
+                    共 <span id="pagination-total">0</span> 条记录
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="prev-page-btn" class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        上一页
+                    </button>
+                    <span class="text-sm text-gray-400">
+                        第 <span id="current-page">1</span> 页
+                    </span>
+                    <button id="next-page-btn" class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        下一页
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div id="empty-state" class="hidden text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p class="mt-4 text-gray-400">暂无调用记录</p>
+        </div>
+    </main>
+
+    <!-- JavaScript -->
+    <script src="/js/api.js"></script>
+    <script src="/js/usage.js"></script>
+</body>
+</html>

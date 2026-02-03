@@ -190,6 +190,34 @@
                         </div>
                     </section>
 
+                    <!-- 费用统计 -->
+                    <section class="bg-gray-800 rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-lg font-semibold">💰 费用统计</h2>
+                            <a href="/usage.html" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+                                查看全局统计 →
+                            </a>
+                        </div>
+                        <div id="usage-stats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gray-700 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">总费用</div>
+                                <div class="text-xl font-bold text-green-400" id="usage-cost">$0.00</div>
+                            </div>
+                            <div class="bg-gray-700 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">图片生成</div>
+                                <div class="text-xl font-bold text-blue-400" id="usage-image">0</div>
+                            </div>
+                            <div class="bg-gray-700 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">视频生成</div>
+                                <div class="text-xl font-bold text-purple-400" id="usage-video">0</div>
+                            </div>
+                            <div class="bg-gray-700 rounded-lg p-4">
+                                <div class="text-sm text-gray-400 mb-1">失败次数</div>
+                                <div class="text-xl font-bold text-red-400" id="usage-failed">0</div>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- 源文件管理 -->
                     <section class="bg-gray-800 rounded-lg p-6">
                         <div class="flex items-center justify-between mb-4">

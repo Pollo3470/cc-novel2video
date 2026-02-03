@@ -352,6 +352,55 @@ class API {
             method: 'POST',
         });
     }
+
+    // ==================== 费用统计 API ====================
+
+    /**
+     * 获取统计摘要
+     * @param {Object} filters - 筛选条件
+     * @param {string} filters.projectName - 项目名称（可选）
+     * @param {string} filters.startDate - 开始日期 YYYY-MM-DD（可选）
+     * @param {string} filters.endDate - 结束日期 YYYY-MM-DD（可选）
+     */
+    static async getUsageStats(filters = {}) {
+        const params = new URLSearchParams();
+        if (filters.projectName) params.append('project_name', filters.projectName);
+        if (filters.startDate) params.append('start_date', filters.startDate);
+        if (filters.endDate) params.append('end_date', filters.endDate);
+        const query = params.toString();
+        return this.request(`/usage/stats${query ? '?' + query : ''}`);
+    }
+
+    /**
+     * 获取调用记录列表
+     * @param {Object} filters - 筛选条件
+     * @param {string} filters.projectName - 项目名称（可选）
+     * @param {string} filters.callType - 调用类型 image/video（可选）
+     * @param {string} filters.status - 状态 success/failed（可选）
+     * @param {string} filters.startDate - 开始日期（可选）
+     * @param {string} filters.endDate - 结束日期（可选）
+     * @param {number} filters.page - 页码
+     * @param {number} filters.pageSize - 每页数量
+     */
+    static async getUsageCalls(filters = {}) {
+        const params = new URLSearchParams();
+        if (filters.projectName) params.append('project_name', filters.projectName);
+        if (filters.callType) params.append('call_type', filters.callType);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.startDate) params.append('start_date', filters.startDate);
+        if (filters.endDate) params.append('end_date', filters.endDate);
+        if (filters.page) params.append('page', filters.page);
+        if (filters.pageSize) params.append('page_size', filters.pageSize);
+        const query = params.toString();
+        return this.request(`/usage/calls${query ? '?' + query : ''}`);
+    }
+
+    /**
+     * 获取有调用记录的项目列表
+     */
+    static async getUsageProjects() {
+        return this.request('/usage/projects');
+    }
 }
 
 // 导出

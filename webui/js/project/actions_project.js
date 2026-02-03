@@ -1,6 +1,7 @@
 import { state } from "./state.js";
 import { renderCharacters, renderClues, renderEpisodes, renderOverview, renderProjectHeader, updateCounts } from "./render.js";
 import { renderSourceFiles } from "./source_files.js";
+import { loadUsageStats } from "./usage.js";
 
 /**
  * 加载项目数据
@@ -31,6 +32,7 @@ export async function loadProject() {
     renderClues();
     renderEpisodes();
     void renderSourceFiles();
+    void loadUsageStats();
     updateCounts();
   } catch (error) {
     console.error("加载项目失败:", error);
