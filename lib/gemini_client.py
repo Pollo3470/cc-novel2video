@@ -150,6 +150,52 @@ class RateLimiter:
                 await asyncio.sleep(0.1)  # 短暂让出控制权
 
 
+_SHARED_IMAGE_MODEL_NAME = "gemini-3-pro-image-preview"
+_SHARED_VIDEO_MODEL_NAME = "veo-3.1-generate-preview"
+
+_shared_rate_limiter: Optional["RateLimiter"] = None
+_shared_rate_limiter_lock = threading.Lock()
+
+
+def _read_int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def get_shared_rate_limiter() -> "RateLimiter":
+    """
+    获取进程内共享的 RateLimiter（从环境变量读取配置）
+
+    - GEMINI_IMAGE_RPM / GEMINI_VIDEO_RPM：每分钟请求数限制
+    - 若 rpm <= 0：视为禁用该模型限流
+    - GEMINI_REQUEST_GAP：最小请求间隔（由 RateLimiter 在 acquire 时读取）
+    """
+    global _shared_rate_limiter
+    if _shared_rate_limiter is not None:
+        return _shared_rate_limiter
+
+    with _shared_rate_limiter_lock:
+        if _shared_rate_limiter is not None:
+            return _shared_rate_limiter
+
+        image_rpm = _read_int_env("GEMINI_IMAGE_RPM", 15)
+        video_rpm = _read_int_env("GEMINI_VIDEO_RPM", 10)
+
+        limits: Dict[str, int] = {}
+        if image_rpm > 0:
+            limits[_SHARED_IMAGE_MODEL_NAME] = image_rpm
+        if video_rpm > 0:
+            limits[_SHARED_VIDEO_MODEL_NAME] = video_rpm
+
+        _shared_rate_limiter = RateLimiter(limits)
+        return _shared_rate_limiter
+
+
 def with_retry(
     max_attempts: int = 5,
     backoff_seconds: Tuple[int, ...] = (2, 4, 8, 16, 32),
@@ -305,7 +351,7 @@ class GeminiClient:
         from google.genai import types
 
         self.types = types
-        self.rate_limiter = rate_limiter
+        self.rate_limiter = rate_limiter or get_shared_rate_limiter()
         self.backend = os.environ.get('GEMINI_BACKEND', 'aistudio').lower()
         self.credentials = None  # 用于 Vertex AI 模式
         self.project_id = None   # 用于 Vertex AI 模式

@@ -5,6 +5,9 @@
 使用 MediaGenerator 中间层自动处理版本管理。
 """
 
+import asyncio
+import os
+import threading
 from typing import Optional, Union, Any
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -12,7 +15,7 @@ from pydantic import BaseModel
 
 from lib.project_manager import ProjectManager
 from lib.media_generator import MediaGenerator
-from lib.gemini_client import RateLimiter
+from lib.gemini_client import get_shared_rate_limiter
 from lib.prompt_builders import build_character_prompt, build_clue_prompt
 from lib.prompt_utils import image_prompt_to_yaml, video_prompt_to_yaml, is_structured_image_prompt, is_structured_video_prompt
 
@@ -23,10 +26,42 @@ project_root = Path(__file__).parent.parent.parent.parent
 pm = ProjectManager(project_root / "projects")
 
 # 初始化限流器（共享给 MediaGenerator）
-rate_limiter = RateLimiter({
-    "gemini-3-pro-image-preview": 15,
-    "veo-3.1-generate-preview": 10,
-})
+rate_limiter = get_shared_rate_limiter()
+
+_video_semaphore: Optional[asyncio.Semaphore] = None
+_video_semaphore_lock = threading.Lock()
+
+
+def _read_int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_video_semaphore() -> asyncio.Semaphore:
+    """
+    获取进程内共享的“在途视频生成”并发限制。
+
+    注意：如果 uvicorn 使用多 worker 进程，该 semaphore 为“每进程一份”。
+    """
+    global _video_semaphore
+    if _video_semaphore is not None:
+        return _video_semaphore
+
+    with _video_semaphore_lock:
+        if _video_semaphore is not None:
+            return _video_semaphore
+
+        max_workers = _read_int_env("VIDEO_MAX_WORKERS", 2)
+        if max_workers < 1:
+            max_workers = 1
+
+        _video_semaphore = asyncio.Semaphore(max_workers)
+        return _video_semaphore
 
 
 def get_media_generator(project_name: str) -> MediaGenerator:
@@ -228,6 +263,8 @@ async def generate_video(
     使用 MediaGenerator 自动处理版本管理。
     需要先有分镜图作为起始帧。
     """
+    sem = _get_video_semaphore()
+    await sem.acquire()
     try:
         project = pm.load_project(project_name)
         project_path = pm.get_project_path(project_name)
@@ -321,6 +358,8 @@ async def generate_video(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        sem.release()
 
 
 # ==================== 人物设计图生成 ====================

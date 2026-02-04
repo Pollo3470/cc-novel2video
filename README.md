@@ -260,6 +260,9 @@ VERTEX_GCS_BUCKET=your-bucket-name
 | `GEMINI_IMAGE_RPM` | 图片生成每分钟请求数限制（默认 15） | ❌ |
 | `GEMINI_VIDEO_RPM` | 视频生成每分钟请求数限制（默认 10） | ❌ |
 | `GEMINI_REQUEST_GAP` | 请求间隔秒数（默认 3.1） | ❌ |
+| `VIDEO_MAX_WORKERS` | 视频生成最大并发数（默认 2） | ❌ |
+
+> 并发说明：`VIDEO_MAX_WORKERS` 同时用于 WebUI（在途视频生成 semaphore）和 CLI（线程池）。如使用 `uvicorn --workers > 1`，并发上限与限流器为“每进程一份”，建议先使用 `--workers 1`。
 
 ### 支持的 API 模型
 
