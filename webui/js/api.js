@@ -353,6 +353,56 @@ class API {
         });
     }
 
+    // ==================== 风格参考图 API ====================
+
+    /**
+     * 上传风格参考图
+     * @param {string} projectName - 项目名称
+     * @param {File} file - 图片文件
+     * @returns {Promise<{success: boolean, style_image: string, style_description: string, url: string}>}
+     */
+    static async uploadStyleImage(projectName, file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(
+            `${API_BASE}/projects/${encodeURIComponent(projectName)}/style-image`,
+            {
+                method: 'POST',
+                body: formData,
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(error.detail || '上传失败');
+        }
+
+        return response.json();
+    }
+
+    /**
+     * 删除风格参考图
+     * @param {string} projectName - 项目名称
+     */
+    static async deleteStyleImage(projectName) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/style-image`, {
+            method: 'DELETE',
+        });
+    }
+
+    /**
+     * 更新风格描述
+     * @param {string} projectName - 项目名称
+     * @param {string} styleDescription - 风格描述
+     */
+    static async updateStyleDescription(projectName, styleDescription) {
+        return this.request(`/projects/${encodeURIComponent(projectName)}/style-description`, {
+            method: 'PATCH',
+            body: JSON.stringify({ style_description: styleDescription }),
+        });
+    }
+
     // ==================== 费用统计 API ====================
 
     /**

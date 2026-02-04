@@ -44,3 +44,6 @@ service-account.json
 
 # Git backup
 .git.backup
+
+# Git worktrees
+.worktrees/

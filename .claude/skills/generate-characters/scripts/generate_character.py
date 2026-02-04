@@ -45,6 +45,7 @@ def generate_character(
 
     description = ""
     style = project.get('style', '')
+    style_description = project.get('style_description', '')
 
     if 'characters' in project and character_name in project['characters']:
         char_info = project['characters'][character_name]
@@ -54,7 +55,7 @@ def generate_character(
         raise ValueError(f"人物 '{character_name}' 的描述为空，请先在 project.json 中添加描述")
 
     # 构建 prompt
-    prompt = build_character_prompt(character_name, description, style)
+    prompt = build_character_prompt(character_name, description, style, style_description)
 
     # 生成图片（带自动版本管理）
     generator = MediaGenerator(project_dir)

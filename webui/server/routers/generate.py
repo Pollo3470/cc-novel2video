@@ -388,7 +388,8 @@ async def generate_character(
 
         # 使用共享库构建 Prompt（确保与 Skill 侧一致）
         style = project.get("style", "")
-        full_prompt = build_character_prompt(char_name, req.prompt, style)
+        style_description = project.get("style_description", "")
+        full_prompt = build_character_prompt(char_name, req.prompt, style, style_description)
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(
@@ -444,8 +445,9 @@ async def generate_clue(
 
         # 使用共享库构建 Prompt（确保与 Skill 侧一致）
         style = project.get("style", "")
+        style_description = project.get("style_description", "")
         clue_type = clue_data.get("type", "prop")
-        full_prompt = build_clue_prompt(clue_name, req.prompt, clue_type, style)
+        full_prompt = build_clue_prompt(clue_name, req.prompt, clue_type, style, style_description)
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(

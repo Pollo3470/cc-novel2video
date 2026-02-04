@@ -1161,6 +1161,46 @@ class GeminiClient:
         )
         return self._process_text_response(response)
 
+    @with_retry(max_attempts=3, backoff_seconds=(2, 4, 8))
+    def analyze_style_image(
+        self,
+        image: Union[str, Path, Image.Image],
+        model: str = "gemini-2.5-flash"
+    ) -> str:
+        """
+        分析图片的视觉风格
+
+        Args:
+            image: 图片路径或 PIL Image 对象
+            model: 模型名称，默认使用 flash 模型
+
+        Returns:
+            风格描述文字（逗号分隔的描述词列表）
+        """
+        # 准备图片
+        if isinstance(image, (str, Path)):
+            img = Image.open(image)
+        else:
+            img = image
+
+        # 风格分析 Prompt（参考 Storycraft）
+        prompt = (
+            "Analyze the visual style of this image. Describe the lighting, "
+            "color palette, medium (e.g., oil painting, digital art, photography), "
+            "texture, and overall mood. Do NOT describe the subject matter "
+            "(e.g., people, objects) or specific content. Focus ONLY on the "
+            "artistic style. Provide a concise comma-separated list of descriptors "
+            "suitable for an image generation prompt."
+        )
+
+        # 调用 API
+        response = self.client.models.generate_content(
+            model=model,
+            contents=[img, prompt]
+        )
+
+        return response.text.strip()
+
     def _download_video(self, video_ref, output_path: Path) -> None:
         """
         下载视频到本地文件

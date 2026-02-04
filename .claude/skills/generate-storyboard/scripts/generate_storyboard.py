@@ -333,6 +333,7 @@ def build_direct_scene_prompt(
     characters: dict = None,
     clues: dict = None,
     style: str = "",
+    style_description: str = "",
     id_field: str = 'segment_id',
     char_field: str = 'characters_in_segment',
     clue_field: str = 'clues_in_segment'
@@ -347,6 +348,7 @@ def build_direct_scene_prompt(
         characters: 人物字典（保留参数以兼容调用）
         clues: 线索字典（保留参数以兼容调用）
         style: 项目风格（用于 YAML 转换）
+        style_description: AI 分析的风格描述
         id_field: ID 字段名
         char_field: 人物字段名（保留参数以兼容调用）
         clue_field: 线索字段名（保留参数以兼容调用）
@@ -358,13 +360,21 @@ def build_direct_scene_prompt(
     if not image_prompt:
         raise ValueError(f"片段 {segment[id_field]} 缺少 image_prompt 字段")
 
+    # 构建风格前缀
+    style_parts = []
+    if style:
+        style_parts.append(f"Style: {style}")
+    if style_description:
+        style_parts.append(f"Visual style: {style_description}")
+    style_prefix = '\n'.join(style_parts) + '\n\n' if style_parts else ''
+
     # 检测是否为结构化格式
     if is_structured_image_prompt(image_prompt):
         # 转换为 YAML 格式
         yaml_prompt = image_prompt_to_yaml(image_prompt, style)
-        return f"{yaml_prompt}\n竖屏构图。"
+        return f"{style_prefix}{yaml_prompt}\n竖屏构图。"
 
-    return f"{image_prompt} 竖屏构图。"
+    return f"{style_prefix}{image_prompt} 竖屏构图。"
 
 
 def generate_individual_scenes(
@@ -912,6 +922,7 @@ def generate_storyboard_direct(
     characters = project_data.get('characters', {}) if project_data else {}
     clues = project_data.get('clues', {}) if project_data else {}
     style = project_data.get('style', '') if project_data else ''
+    style_description = project_data.get('style_description', '') if project_data else ''
     storyboard_aspect_ratio = get_aspect_ratio(project_data, 'storyboard')  # 9:16
 
     print(f"📷 直接生成 {len(segments_to_process)} 个分镜图（无多宫格）...")
@@ -949,7 +960,7 @@ def generate_storyboard_direct(
 
         # 构建 prompt（直接生成，无需参考多宫格）
         prompt = build_direct_scene_prompt(
-            segment, characters, clues, style,
+            segment, characters, clues, style, style_description,
             id_field, char_field, clue_field
         )
 

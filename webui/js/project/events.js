@@ -7,6 +7,7 @@ import { regenerateOverview, saveOverview } from "./overview.js";
 import { saveScene, saveSegment } from "./scenes_segments.js";
 import { handleSourceUpload, newSourceFile, saveSourceFile } from "./source_files.js";
 import { closeAllModals, closeLightbox, setupImageUpload } from "./ui.js";
+import { setupStyleImageEvents } from "./style_image.js";
 
 /**
  * 切换剧集展开/折叠
@@ -124,6 +125,9 @@ export function setupEventListeners() {
 
   // Prompt 编辑器初始化（枚举选项/对白按钮）
   initPromptEditors();
+
+  // 风格参考图事件
+  setupStyleImageEvents();
 }
 
 /**
