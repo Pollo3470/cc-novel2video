@@ -20,7 +20,9 @@ export function renderStyleImageSection() {
         contentState.classList.remove('hidden');
 
         const imgEl = document.getElementById('style-image-display');
-        imgEl.src = API.getFileUrl(state.projectName, project.style_image);
+        const baseUrl = API.getFileUrl(state.projectName, project.style_image);
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        imgEl.src = `${baseUrl}${separator}t=${state.cacheBuster}`;
 
         const descEl = document.getElementById('style-description-edit');
         descEl.value = project.style_description || '';
@@ -79,6 +81,7 @@ async function handleStyleImageUpload(e) {
         // 更新本地状态
         state.currentProject.style_image = result.style_image;
         state.currentProject.style_description = result.style_description;
+        state.cacheBuster = Date.now();
 
         // 重新渲染
         renderStyleImageSection();
