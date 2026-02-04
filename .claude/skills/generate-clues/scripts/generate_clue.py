@@ -41,6 +41,7 @@ def generate_clue(
     # 获取项目信息和风格
     project = pm.load_project(project_name)
     style = project.get('style', '')
+    style_description = project.get('style_description', '')
 
     # 获取线索信息
     clue = pm.get_clue(project_name, clue_name)
@@ -51,7 +52,7 @@ def generate_clue(
         raise ValueError(f"线索 '{clue_name}' 的描述为空，请先添加描述")
 
     # 使用共享库构建 prompt（确保与 WebUI 侧一致）
-    prompt = build_clue_prompt(clue_name, description, clue_type, style)
+    prompt = build_clue_prompt(clue_name, description, clue_type, style, style_description)
 
     # 生成图片（带自动版本管理）
     generator = MediaGenerator(project_dir)

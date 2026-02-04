@@ -2,6 +2,9 @@
  * 项目列表页逻辑
  */
 
+// 暂存的风格参考图（创建项目时再上传）
+let pendingStyleImage = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     loadProjects();
     setupEventListeners();
@@ -185,6 +188,42 @@ function setupEventListeners() {
             closeModal();
         }
     });
+
+    // 风格参考图上传
+    const styleImageUpload = document.getElementById('style-image-upload');
+    const styleImageInput = document.getElementById('style-image-input');
+
+    styleImageUpload.onclick = () => styleImageInput.click();
+    styleImageInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        pendingStyleImage = file;
+
+        // 显示本地预览
+        const placeholder = document.getElementById('style-image-placeholder');
+        const preview = document.getElementById('style-image-preview');
+        const thumb = document.getElementById('style-image-thumb');
+
+        thumb.src = URL.createObjectURL(file);
+        placeholder.classList.add('hidden');
+        preview.classList.remove('hidden');
+    };
+
+    document.getElementById('remove-style-image').onclick = (e) => {
+        e.stopPropagation();
+        pendingStyleImage = null;
+
+        const placeholder = document.getElementById('style-image-placeholder');
+        const preview = document.getElementById('style-image-preview');
+        const thumb = document.getElementById('style-image-thumb');
+
+        URL.revokeObjectURL(thumb.src);
+        thumb.src = '';
+        preview.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        document.getElementById('style-image-input').value = '';
+    };
 }
 
 /**
@@ -193,6 +232,18 @@ function setupEventListeners() {
 function closeModal() {
     document.getElementById('new-project-modal').classList.add('hidden');
     document.getElementById('create-project-form').reset();
+
+    // 清理风格图暂存
+    pendingStyleImage = null;
+    const placeholder = document.getElementById('style-image-placeholder');
+    const preview = document.getElementById('style-image-preview');
+    const thumb = document.getElementById('style-image-thumb');
+    if (thumb.src) {
+        URL.revokeObjectURL(thumb.src);
+        thumb.src = '';
+    }
+    preview.classList.add('hidden');
+    placeholder.classList.remove('hidden');
 }
 
 /**
@@ -216,7 +267,20 @@ async function createProject() {
         submitBtn.disabled = true;
         submitBtn.textContent = '创建中...';
 
+        // 1. 创建项目
         await API.createProject(name, title, style, contentMode);
+
+        // 2. 如果有风格参考图，上传并分析
+        if (pendingStyleImage) {
+            submitBtn.textContent = '分析风格中...';
+            try {
+                await API.uploadStyleImage(name, pendingStyleImage);
+            } catch (error) {
+                console.error('风格图上传失败:', error);
+                // 不阻断创建流程，只记录错误
+            }
+        }
+
         closeModal();
         loadProjects();
 

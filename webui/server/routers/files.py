@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from lib.project_manager import ProjectManager
 from lib.image_utils import convert_image_bytes_to_png
+from lib.gemini_client import GeminiClient
 
 router = APIRouter()
 
@@ -419,3 +420,110 @@ async def delete_draft(project_name: str, episode: int, step_num: int):
 
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+
+
+# ==================== 风格参考图管理 ====================
+
+@router.post("/projects/{project_name}/style-image")
+async def upload_style_image(
+    project_name: str,
+    file: UploadFile = File(...)
+):
+    """
+    上传风格参考图并分析风格
+
+    1. 保存图片到 projects/{project_name}/style_reference.png
+    2. 调用 Gemini API 分析风格
+    3. 更新 project.json 的 style_image 和 style_description 字段
+    """
+    # 检查文件类型
+    ext = Path(file.filename).suffix.lower()
+    if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型 {ext}，允许的类型: .png, .jpg, .jpeg, .webp"
+        )
+
+    try:
+        project_dir = pm.get_project_path(project_name)
+
+        # 保存图片（统一转换为 PNG）
+        content = await file.read()
+        try:
+            png_content = convert_image_bytes_to_png(content)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="无效的图片文件，无法解析")
+
+        output_path = project_dir / "style_reference.png"
+        with open(output_path, "wb") as f:
+            f.write(png_content)
+
+        # 调用 Gemini API 分析风格
+        client = GeminiClient()
+        style_description = client.analyze_style_image(output_path)
+
+        # 更新 project.json
+        project_data = pm.load_project(project_name)
+        project_data["style_image"] = "style_reference.png"
+        project_data["style_description"] = style_description
+        pm.save_project(project_name, project_data)
+
+        return {
+            "success": True,
+            "style_image": "style_reference.png",
+            "style_description": style_description,
+            "url": f"/api/v1/files/{project_name}/style_reference.png"
+        }
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/projects/{project_name}/style-image")
+async def delete_style_image(project_name: str):
+    """
+    删除风格参考图及相关字段
+    """
+    try:
+        project_dir = pm.get_project_path(project_name)
+
+        # 删除图片文件
+        image_path = project_dir / "style_reference.png"
+        if image_path.exists():
+            image_path.unlink()
+
+        # 清除 project.json 中的相关字段
+        project_data = pm.load_project(project_name)
+        project_data.pop("style_image", None)
+        project_data.pop("style_description", None)
+        pm.save_project(project_name, project_data)
+
+        return {"success": True}
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/projects/{project_name}/style-description")
+async def update_style_description(
+    project_name: str,
+    style_description: str = Body(..., embed=True)
+):
+    """
+    更新风格描述（手动编辑）
+    """
+    try:
+        project_data = pm.load_project(project_name)
+        project_data["style_description"] = style_description
+        pm.save_project(project_name, project_data)
+
+        return {"success": True, "style_description": style_description}
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"项目 '{project_name}' 不存在")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

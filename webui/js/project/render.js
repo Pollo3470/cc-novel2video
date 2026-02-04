@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { getPromptText } from "./prompt_editors.js";
+import { renderStyleImageSection } from "./style_image.js";
 
 function getPhaseClass(phase) {
   const classes = {
@@ -82,6 +83,9 @@ export function renderOverview() {
 
   // 渲染故事概述
   renderOverviewSection();
+
+  // 渲染风格参考图
+  renderStyleImageSection();
 
   // 渲染进度统计
   const progress = project.status?.progress || {};

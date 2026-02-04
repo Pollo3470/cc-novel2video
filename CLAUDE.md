@@ -267,18 +267,19 @@ STORYBOARD_MAX_WORKERS=3
 
 ```
 projects/{项目名}/
-├── project.json  # 项目级元数据（人物、线索、状态）
-├── source/       # 原始小说内容
-├── scripts/      # 分镜剧本 (JSON)
-├── characters/   # 人物设计图
-├── clues/        # 线索设计图（重要物品/环境）
-├── storyboards/  # 分镜图片
+├── project.json       # 项目级元数据（人物、线索、状态）
+├── style_reference.png  # 风格参考图（可选，上传后自动生成 style_description）
+├── source/            # 原始小说内容
+├── scripts/           # 分镜剧本 (JSON)
+├── characters/        # 人物设计图
+├── clues/             # 线索设计图（重要物品/环境）
+├── storyboards/       # 分镜图片
 │   ├── scene_E1S01.png   # 分镜图（说书模式：9:16，剧集模式：16:9）
 │   ├── scene_E1S02.png
 │   ├── grid_001.png      # [仅剧集动画模式] 多宫格预览图
 │   └── ...
-├── videos/       # 视频分镜（含 checkpoint 文件）
-└── output/       # 最终输出
+├── videos/            # 视频分镜（含 checkpoint 文件）
+└── output/            # 最终输出
 ```
 
 ### project.json 结构
@@ -286,7 +287,9 @@ projects/{项目名}/
 项目级元数据文件包含：
 - `title`：项目标题
 - `content_mode`：内容模式（`narration` 默认 或 `drama`）
-- `style`：整体视觉风格描述（不限于动漫，根据项目需要设定）
+- `style`：整体视觉风格标签（如 `Photographic`、`Anime`、`3D Animation`）
+- `style_image`：风格参考图路径（可选，如 `style_reference.png`）
+- `style_description`：AI 分析的风格描述（上传风格参考图后自动生成，可手动编辑）
 - `overview`：**项目概述**（上传源文件后自动生成，包含故事梗概、题材类型、核心主题、世界观设定）
 - `aspect_ratio`：可选，自定义各资源的画面比例
 - `episodes`：剧集列表（仅包含核心元数据）
@@ -330,7 +333,9 @@ projects/{项目名}/
 {
   "title": "重生之皇后威武",
   "content_mode": "narration",
-  "style": "古装宫廷风格，精致唯美画面",
+  "style": "Photographic",
+  "style_image": "style_reference.png",
+  "style_description": "Soft diffused lighting, muted earth tones with jade accents, photorealistic rendering, shallow depth of field, cinematic composition, traditional Chinese palace aesthetic",
   "overview": {
     "synopsis": "讲述姜月茴重生后，从受辱皇后逆袭成为权倾朝野的故事...",
     "genre": "古装宫斗、重生复仇",

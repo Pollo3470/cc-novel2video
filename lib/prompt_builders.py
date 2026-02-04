@@ -15,7 +15,7 @@
 """
 
 
-def build_character_prompt(name: str, description: str, style: str = "") -> str:
+def build_character_prompt(name: str, description: str, style: str = "", style_description: str = "") -> str:
     """
     构建人物设计图 Prompt
 
@@ -25,13 +25,19 @@ def build_character_prompt(name: str, description: str, style: str = "") -> str:
         name: 人物名称
         description: 人物外貌描述（应为叙事性段落）
         style: 项目风格
+        style_description: AI 分析的风格描述
 
     Returns:
         完整的 Prompt 字符串
     """
     style_part = f"，{style}" if style else ""
 
-    return f"""人物设计参考图{style_part}。
+    # 构建风格前缀
+    style_prefix = ""
+    if style_description:
+        style_prefix = f"Visual style: {style_description}\n\n"
+
+    return f"""{style_prefix}人物设计参考图{style_part}。
 
 「{name}」的全身立绘。
 
@@ -47,7 +53,8 @@ def build_clue_prompt(
     name: str,
     description: str,
     clue_type: str = "prop",
-    style: str = ""
+    style: str = "",
+    style_description: str = ""
 ) -> str:
     """
     构建线索设计图 Prompt
@@ -59,17 +66,18 @@ def build_clue_prompt(
         description: 线索描述
         clue_type: 线索类型 ("prop" 道具 或 "location" 环境)
         style: 项目风格
+        style_description: AI 分析的风格描述
 
     Returns:
         完整的 Prompt 字符串
     """
     if clue_type == "location":
-        return build_location_prompt(name, description, style)
+        return build_location_prompt(name, description, style, style_description)
     else:
-        return build_prop_prompt(name, description, style)
+        return build_prop_prompt(name, description, style, style_description)
 
 
-def build_prop_prompt(name: str, description: str, style: str = "") -> str:
+def build_prop_prompt(name: str, description: str, style: str = "", style_description: str = "") -> str:
     """
     构建道具类线索 Prompt
 
@@ -79,20 +87,26 @@ def build_prop_prompt(name: str, description: str, style: str = "") -> str:
         name: 道具名称
         description: 道具描述
         style: 项目风格
+        style_description: AI 分析的风格描述
 
     Returns:
         完整的 Prompt 字符串
     """
-    style_prefix = f"，{style}" if style else ""
+    style_suffix = f"，{style}" if style else ""
 
-    return f"""一张专业的道具设计参考图{style_prefix}。
+    # 构建风格前缀
+    style_prefix = ""
+    if style_description:
+        style_prefix = f"Visual style: {style_description}\n\n"
+
+    return f"""{style_prefix}一张专业的道具设计参考图{style_suffix}。
 
 道具「{name}」的多视角展示。{description}
 
 三个视图水平排列在纯净浅灰背景上：左侧正面全视图、中间45度侧视图展示立体感、右侧关键细节特写。柔和均匀的摄影棚照明，高清质感，色彩准确。"""
 
 
-def build_location_prompt(name: str, description: str, style: str = "") -> str:
+def build_location_prompt(name: str, description: str, style: str = "", style_description: str = "") -> str:
     """
     构建环境类线索 Prompt
 
@@ -102,13 +116,19 @@ def build_location_prompt(name: str, description: str, style: str = "") -> str:
         name: 场景名称
         description: 场景描述
         style: 项目风格
+        style_description: AI 分析的风格描述
 
     Returns:
         完整的 Prompt 字符串
     """
-    style_prefix = f"，{style}" if style else ""
+    style_suffix = f"，{style}" if style else ""
 
-    return f"""一张专业的场景设计参考图{style_prefix}。
+    # 构建风格前缀
+    style_prefix = ""
+    if style_description:
+        style_prefix = f"Visual style: {style_description}\n\n"
+
+    return f"""{style_prefix}一张专业的场景设计参考图{style_suffix}。
 
 标志性场景「{name}」的视觉参考。{description}
 
@@ -131,3 +151,30 @@ def build_storyboard_suffix(content_mode: str = "narration") -> str:
         return "竖屏构图。"
     else:
         return ""
+
+
+def build_style_prompt(project_data: dict) -> str:
+    """
+    构建风格描述 Prompt 片段
+
+    合并 style（用户手动填写）和 style_description（AI 分析生成）。
+
+    Args:
+        project_data: project.json 数据
+
+    Returns:
+        风格描述字符串，用于拼接到生成 Prompt 中
+    """
+    parts = []
+
+    # 基础风格标签
+    style = project_data.get('style', '')
+    if style:
+        parts.append(f"Style: {style}")
+
+    # AI 分析的风格描述
+    style_description = project_data.get('style_description', '')
+    if style_description:
+        parts.append(f"Visual style: {style_description}")
+
+    return '\n'.join(parts)
