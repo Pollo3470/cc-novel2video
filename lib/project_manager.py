@@ -168,8 +168,6 @@ class ProjectManager:
                 "chapter": chapter,
                 "source_file": source_file
             },
-            "characters_in_episode": [],
-            "clues_in_episode": [],
             "scenes": [],
             "metadata": {
                 "created_at": datetime.now().isoformat(),
@@ -583,12 +581,8 @@ class ProjectManager:
             self.sync_clues_from_script(project_name, script_filename)
             script = self.load_script(project_name, script_filename)
 
-        # 确保新格式字段存在
-        if 'characters_in_episode' not in script:
-            script['characters_in_episode'] = []
-
-        if 'clues_in_episode' not in script:
-            script['clues_in_episode'] = []
+        # 注意：characters_in_episode 和 clues_in_episode 已改为读时计算
+        # 不再在 normalize_script 中创建这些字段
 
         if 'scenes' not in script:
             script['scenes'] = []
@@ -877,15 +871,6 @@ class ProjectManager:
             "episodes": [],
             "characters": {},
             "clues": {},
-            "status": {
-                "current_phase": "script",
-                "progress": {
-                    "characters": {"total": 0, "completed": 0},
-                    "clues": {"total": 0, "completed": 0},
-                    "storyboards": {"total": 0, "completed": 0},
-                    "videos": {"total": 0, "completed": 0}
-                }
-            },
             "metadata": {
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
@@ -924,13 +909,11 @@ class ProjectManager:
                 self.save_project(project_name, project)
                 return project
 
-        # 添加新剧集
+        # 添加新剧集（不包含统计字段，由 StatusCalculator 读时计算）
         project['episodes'].append({
             "episode": episode,
             "title": title,
-            "script_file": script_file,
-            "status": "draft",
-            "scenes_count": 0
+            "script_file": script_file
         })
 
         # 按集数排序
@@ -941,87 +924,27 @@ class ProjectManager:
 
     def sync_project_status(self, project_name: str) -> Dict:
         """
-        同步项目状态（统计各类资源的完成情况）
+        [已废弃] 同步项目状态
+
+        此方法已废弃。status、progress、scenes_count 等统计字段
+        现在由 StatusCalculator 读时计算，不再存储在 JSON 文件中。
+
+        保留此方法仅为向后兼容，实际不执行任何写入操作。
 
         Args:
             project_name: 项目名称
 
         Returns:
-            更新后的项目元数据
+            项目元数据（不含统计字段，统计字段由 StatusCalculator 注入）
         """
-        project = self.load_project(project_name)
-        project_dir = self.get_project_path(project_name)
-
-        # 统计人物设计图
-        characters_total = len(project['characters'])
-        characters_completed = sum(
-            1 for char in project['characters'].values()
-            if char.get('character_sheet') and (project_dir / char['character_sheet']).exists()
+        import warnings
+        warnings.warn(
+            "sync_project_status() 已废弃。status 等统计字段现由 StatusCalculator 读时计算。",
+            DeprecationWarning,
+            stacklevel=2
         )
-
-        # 统计线索设计图
-        clues_total = len([c for c in project['clues'].values() if c.get('importance') == 'major'])
-        clues_completed = sum(
-            1 for clue in project['clues'].values()
-            if clue.get('clue_sheet') and (project_dir / clue['clue_sheet']).exists()
-        )
-
-        # 统计分镜和视频（遍历所有剧本）
-        storyboards_total = 0
-        storyboards_completed = 0
-        videos_total = 0
-        videos_completed = 0
-
-        for ep in project['episodes']:
-            try:
-                script = self.load_script(project_name, ep['script_file'].replace('scripts/', ''))
-                scenes_count = len(script.get('scenes', []))
-                ep['scenes_count'] = scenes_count
-                storyboards_total += scenes_count
-                videos_total += scenes_count
-
-                for scene in script.get('scenes', []):
-                    assets = scene.get('generated_assets', {})
-                    if assets.get('storyboard_image'):
-                        storyboards_completed += 1
-                    if assets.get('video_clip'):
-                        videos_completed += 1
-
-                # 更新剧集状态
-                if videos_completed == scenes_count and scenes_count > 0:
-                    ep['status'] = 'completed'
-                elif storyboards_completed > 0 or videos_completed > 0:
-                    ep['status'] = 'in_production'
-                else:
-                    ep['status'] = 'draft'
-
-            except FileNotFoundError:
-                continue
-
-        # 更新进度
-        project['status']['progress'] = {
-            "characters": {"total": characters_total, "completed": characters_completed},
-            "clues": {"total": clues_total, "completed": clues_completed},
-            "storyboards": {"total": storyboards_total, "completed": storyboards_completed},
-            "videos": {"total": videos_total, "completed": videos_completed}
-        }
-
-        # 确定当前阶段
-        if videos_completed == videos_total and videos_total > 0:
-            project['status']['current_phase'] = 'compose'
-        elif videos_completed > 0:
-            project['status']['current_phase'] = 'video'
-        elif storyboards_completed > 0:
-            project['status']['current_phase'] = 'storyboard'
-        elif clues_completed > 0 or clues_total == 0:
-            project['status']['current_phase'] = 'storyboard'
-        elif characters_completed > 0:
-            project['status']['current_phase'] = 'clues'
-        else:
-            project['status']['current_phase'] = 'characters'
-
-        self.save_project(project_name, project)
-        return project
+        # 仅返回项目数据，不执行任何写入
+        return self.load_project(project_name)
 
     # ==================== 项目级人物管理 ====================
 
