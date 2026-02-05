@@ -1368,7 +1368,7 @@ class ProjectManager:
         # 使用原生异步 API
         response_text = await client.generate_text_async(
             prompt=prompt,
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             response_schema=ProjectOverview.model_json_schema(),
         )
 

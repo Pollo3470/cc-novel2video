@@ -1115,7 +1115,7 @@ class GeminiClient:
     def generate_text(
         self,
         prompt: str,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-3-flash-preview",
         response_schema: Optional[Dict] = None,
     ) -> str:
         """
@@ -1141,7 +1141,7 @@ class GeminiClient:
     async def generate_text_async(
         self,
         prompt: str,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-3-flash-preview",
         response_schema: Optional[Dict] = None,
     ) -> str:
         """
