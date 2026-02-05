@@ -1,7 +1,6 @@
 """
 prompt_builders_script.py - 剧本生成 Prompt 构建器
 
-借鉴 Storycraft 的 Prompt 工程技巧：
 1. XML 标签分隔上下文
 2. 明确的字段描述和约束
 3. 可选值列表约束输出
