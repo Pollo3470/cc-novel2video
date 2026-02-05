@@ -94,12 +94,11 @@ def migrate_project(pm: ProjectManager, project_name: str, dry_run: bool = False
                 episode_num = i
                 break
 
+        # 添加剧集信息（不包含统计字段，由 StatusCalculator 读时计算）
         episodes.append({
             "episode": episode_num,
             "title": novel_info.get('chapter', script_file.stem),
-            "script_file": f"scripts/{script_file.name}",
-            "status": "draft",
-            "scenes_count": scenes_count
+            "script_file": f"scripts/{script_file.name}"
         })
         print(f"      📺 剧集 {episode_num}: {scenes_count} 个场景")
 
@@ -117,21 +116,13 @@ def migrate_project(pm: ProjectManager, project_name: str, dry_run: bool = False
             first_script = json.load(f)
             project_title = first_script.get('novel', {}).get('title', project_name)
 
+    # 构建 project.json（不包含 status 字段，由 StatusCalculator 读时计算）
     project_data = {
         "title": project_title,
         "style": "",
         "episodes": episodes,
         "characters": all_characters,
         "clues": {},
-        "status": {
-            "current_phase": "script",
-            "progress": {
-                "characters": {"total": len(all_characters), "completed": 0},
-                "clues": {"total": 0, "completed": 0},
-                "storyboards": {"total": 0, "completed": 0},
-                "videos": {"total": 0, "completed": 0}
-            }
-        },
         "metadata": {
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
@@ -139,7 +130,7 @@ def migrate_project(pm: ProjectManager, project_name: str, dry_run: bool = False
         }
     }
 
-    # 统计已完成的人物设计图
+    # 统计已完成的人物设计图（仅用于日志输出）
     completed_chars = 0
     for name, char_data in all_characters.items():
         sheet = char_data.get('character_sheet')
@@ -147,7 +138,6 @@ def migrate_project(pm: ProjectManager, project_name: str, dry_run: bool = False
             sheet_path = project_dir / sheet
             if sheet_path.exists():
                 completed_chars += 1
-    project_data['status']['progress']['characters']['completed'] = completed_chars
 
     # 创建 clues 目录
     clues_dir = project_dir / 'clues'

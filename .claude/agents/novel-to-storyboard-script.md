@@ -135,7 +135,6 @@ model: opus
    else:
        print("✅ project.json 验证通过")
    ```
-4. 输出本集 `characters_in_episode` 和 `clues_in_episode` 名称列表（供 Step 4 使用）
 
 **保存中间文件**：使用 Write 工具将角色表和线索表保存为 Markdown 文件
 - 路径: `projects/{项目名}/drafts/episode_{集数}/step3_character_clue_tables.md`
@@ -162,8 +161,6 @@ model: opus
     "chapter": "章节名",
     "source_file": "source/文件名.txt"
   },
-  "characters_in_episode": ["角色名1", "角色名2"],
-  "clues_in_episode": ["线索名1", "线索名2"],
   "scenes": [
     {
       "scene_id": "E1S01",
@@ -312,9 +309,8 @@ model: opus
    - 直接使用 Step 2 标注的 segment_break 点，不再重新判断
 
 8. **数据引用规则**：
-   - `characters_in_episode` 和 `clues_in_episode` 必须只包含 project.json 中已定义的角色和线索
-   - `characters_in_scene` 必须是 `characters_in_episode` 的子集
-   - `clues_in_scene` 必须是 `clues_in_episode` 的子集
+   - `characters_in_scene` 必须只包含 project.json 中已定义的角色
+   - `clues_in_scene` 必须只包含 project.json 中已定义的线索
 
 9. 将生成的 JSON 保存到 `projects/{项目名}/scripts/episode_1.json`（而非 script.json）
 

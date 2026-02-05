@@ -159,7 +159,7 @@ class DataValidator:
         验证 episode JSON
 
         检查内容：
-        - 引用一致性（characters_in_episode/clues_in_episode 必须存在于 project.json）
+        - 引用一致性（characters_in_segment/scene 必须存在于 project.json）
         - 字段完整性
 
         Args:
@@ -205,15 +205,14 @@ class DataValidator:
         content_mode = episode.get('content_mode', project.get('content_mode', 'narration'))
 
         # 注意：characters_in_episode 和 clues_in_episode 已改为读时计算
-        # 不再要求 episode 文件中必须包含这些字段
-        # 仅当存在时验证其格式
+        # 不再验证这些字段，仅当存在且格式错误时给出警告
         characters_in_episode = episode.get('characters_in_episode')
-        if characters_in_episode is not None and not isinstance(characters_in_episode, list):
-            warnings.append("characters_in_episode 应为数组（此字段已改为读时计算，可移除）")
+        if characters_in_episode is not None:
+            warnings.append("characters_in_episode 字段已废弃（改为读时计算），可安全移除")
 
         clues_in_episode = episode.get('clues_in_episode')
-        if clues_in_episode is not None and not isinstance(clues_in_episode, list):
-            warnings.append("clues_in_episode 应为数组（此字段已改为读时计算，可移除）")
+        if clues_in_episode is not None:
+            warnings.append("clues_in_episode 字段已废弃（改为读时计算），可安全移除")
 
         # 根据 content_mode 验证 segments 或 scenes
         # 直接使用 project 级别的 characters 和 clues 进行引用验证
@@ -243,8 +242,8 @@ class DataValidator:
     def _validate_segments(
         self,
         segments: List[Dict],
-        characters_in_episode: set,
-        clues_in_episode: set,
+        project_characters: set,
+        project_clues: set,
         errors: List[str],
         warnings: List[str]
     ):
@@ -281,7 +280,7 @@ class DataValidator:
             elif not isinstance(chars_in_segment, list):
                 errors.append(f"{prefix}: characters_in_segment 必须是数组")
             else:
-                invalid = set(chars_in_segment) - characters_in_episode
+                invalid = set(chars_in_segment) - project_characters
                 if invalid:
                     errors.append(f"{prefix}: characters_in_segment 引用了不存在于 project.json 的角色: {invalid}")
 
@@ -292,7 +291,7 @@ class DataValidator:
             elif not isinstance(clues_in_segment, list):
                 errors.append(f"{prefix}: clues_in_segment 必须是数组")
             else:
-                invalid = set(clues_in_segment) - clues_in_episode
+                invalid = set(clues_in_segment) - project_clues
                 if invalid:
                     errors.append(f"{prefix}: clues_in_segment 引用了不存在于 project.json 的线索: {invalid}")
 
@@ -305,8 +304,8 @@ class DataValidator:
     def _validate_scenes(
         self,
         scenes: List[Dict],
-        characters_in_episode: set,
-        clues_in_episode: set,
+        project_characters: set,
+        project_clues: set,
         errors: List[str],
         warnings: List[str]
     ):
@@ -346,7 +345,7 @@ class DataValidator:
             elif not isinstance(chars_in_scene, list):
                 errors.append(f"{prefix}: characters_in_scene 必须是数组")
             else:
-                invalid = set(chars_in_scene) - characters_in_episode
+                invalid = set(chars_in_scene) - project_characters
                 if invalid:
                     errors.append(f"{prefix}: characters_in_scene 引用了不存在于 project.json 的角色: {invalid}")
 
@@ -357,7 +356,7 @@ class DataValidator:
             elif not isinstance(clues_in_scene, list):
                 errors.append(f"{prefix}: clues_in_scene 必须是数组")
             else:
-                invalid = set(clues_in_scene) - clues_in_episode
+                invalid = set(clues_in_scene) - project_clues
                 if invalid:
                     errors.append(f"{prefix}: clues_in_scene 引用了不存在于 project.json 的线索: {invalid}")
 
