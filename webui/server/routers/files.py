@@ -8,12 +8,13 @@ import json
 import os
 import urllib.parse
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, UploadFile, File, Body
+
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from lib.project_manager import ProjectManager
-from lib.image_utils import convert_image_bytes_to_png
 from lib.gemini_client import GeminiClient
+from lib.image_utils import convert_image_bytes_to_png
+from lib.project_manager import ProjectManager
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ pm = ProjectManager(project_root / "projects")
 ALLOWED_EXTENSIONS = {
     "source": [".txt", ".md", ".doc", ".docx"],
     "character": [".png", ".jpg", ".jpeg", ".webp"],
+    "character_ref": [".png", ".jpg", ".jpeg", ".webp"],
     "clue": [".png", ".jpg", ".jpeg", ".webp"],
     "storyboard": [".png", ".jpg", ".jpeg", ".webp"],
 }
@@ -53,10 +55,7 @@ async def serve_project_file(project_name: str, path: str):
 
 @router.post("/projects/{project_name}/upload/{upload_type}")
 async def upload_file(
-    project_name: str,
-    upload_type: str,
-    file: UploadFile = File(...),
-    name: str = None
+    project_name: str, upload_type: str, file: UploadFile = File(...), name: str = None
 ):
     """
     上传文件
@@ -75,7 +74,7 @@ async def upload_file(
     if ext not in ALLOWED_EXTENSIONS[upload_type]:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的文件类型 {ext}，允许的类型: {ALLOWED_EXTENSIONS[upload_type]}"
+            detail=f"不支持的文件类型 {ext}，允许的类型: {ALLOWED_EXTENSIONS[upload_type]}",
         )
 
     try:
@@ -88,6 +87,12 @@ async def upload_file(
         elif upload_type == "character":
             target_dir = project_dir / "characters"
             # 统一保存为 PNG，且使用稳定文件名（避免 jpg/png 不一致导致版本还原/引用异常）
+            if name:
+                filename = f"{name}.png"
+            else:
+                filename = f"{Path(file.filename).stem}.png"
+        elif upload_type == "character_ref":
+            target_dir = project_dir / "characters" / "refs"
             if name:
                 filename = f"{name}.png"
             else:
@@ -114,7 +119,7 @@ async def upload_file(
 
         # 保存文件（图片统一转 PNG）
         content = await file.read()
-        if upload_type in ("character", "clue", "storyboard"):
+        if upload_type in ("character", "character_ref", "clue", "storyboard"):
             try:
                 content = convert_image_bytes_to_png(content)
             except ValueError:
@@ -128,6 +133,8 @@ async def upload_file(
             relative_path = f"source/{filename}"
         elif upload_type == "character":
             relative_path = f"characters/{filename}"
+        elif upload_type == "character_ref":
+            relative_path = f"characters/refs/{filename}"
         elif upload_type == "clue":
             relative_path = f"clues/{filename}"
         elif upload_type == "storyboard":
@@ -137,7 +144,17 @@ async def upload_file(
 
         if upload_type == "character" and name:
             try:
-                pm.update_project_character_sheet(project_name, name, f"characters/{filename}")
+                pm.update_project_character_sheet(
+                    project_name, name, f"characters/{filename}"
+                )
+            except KeyError:
+                pass  # 人物不存在，忽略
+
+        if upload_type == "character_ref" and name:
+            try:
+                pm.update_character_reference_image(
+                    project_name, name, f"characters/refs/{filename}"
+                )
             except KeyError:
                 pass  # 人物不存在，忽略
 
@@ -151,7 +168,7 @@ async def upload_file(
             "success": True,
             "filename": filename,
             "path": relative_path,
-            "url": f"/api/v1/files/{project_name}/{relative_path}"
+            "url": f"/api/v1/files/{project_name}/{relative_path}",
         }
 
     except FileNotFoundError:
@@ -172,7 +189,7 @@ async def list_project_files(project_name: str):
             "clues": [],
             "storyboards": [],
             "videos": [],
-            "output": []
+            "output": [],
         }
 
         for subdir, file_list in files.items():
@@ -180,11 +197,13 @@ async def list_project_files(project_name: str):
             if subdir_path.exists():
                 for f in subdir_path.iterdir():
                     if f.is_file() and not f.name.startswith("."):
-                        file_list.append({
-                            "name": f.name,
-                            "size": f.stat().st_size,
-                            "url": f"/api/v1/files/{project_name}/{subdir}/{f.name}"
-                        })
+                        file_list.append(
+                            {
+                                "name": f.name,
+                                "size": f.stat().st_size,
+                                "url": f"/api/v1/files/{project_name}/{subdir}/{f.name}",
+                            }
+                        )
 
         return {"files": files}
 
@@ -222,7 +241,9 @@ async def get_source_file(project_name: str, filename: str):
 
 
 @router.put("/projects/{project_name}/source/{filename}")
-async def update_source_file(project_name: str, filename: str, content: str = Body(..., media_type="text/plain")):
+async def update_source_file(
+    project_name: str, filename: str, content: str = Body(..., media_type="text/plain")
+):
     """更新或创建 source 文件"""
     try:
         project_dir = pm.get_project_path(project_name)
@@ -272,6 +293,7 @@ async def delete_source_file(project_name: str, filename: str):
 
 # ==================== 草稿文件管理 ====================
 
+
 @router.get("/projects/{project_name}/drafts")
 async def list_drafts(project_name: str):
     """列出项目的所有草稿目录和文件"""
@@ -286,13 +308,15 @@ async def list_drafts(project_name: str):
                     episode_num = episode_dir.name.replace("episode_", "")
                     files = []
                     for f in sorted(episode_dir.glob("*.md")):
-                        files.append({
-                            "name": f.name,
-                            "step": _extract_step_number(f.name),
-                            "title": _get_step_title(f.name),
-                            "size": f.stat().st_size,
-                            "modified": f.stat().st_mtime
-                        })
+                        files.append(
+                            {
+                                "name": f.name,
+                                "step": _extract_step_number(f.name),
+                                "title": _get_step_title(f.name),
+                                "size": f.stat().st_size,
+                                "modified": f.stat().st_mtime,
+                            }
+                        )
                     result[episode_num] = files
 
         return {"drafts": result}
@@ -303,7 +327,8 @@ async def list_drafts(project_name: str):
 def _extract_step_number(filename: str) -> int:
     """从文件名提取步骤编号"""
     import re
-    match = re.search(r'step(\d+)', filename)
+
+    match = re.search(r"step(\d+)", filename)
     return int(match.group(1)) if match else 0
 
 
@@ -313,13 +338,13 @@ def _get_step_files(content_mode: str) -> dict:
         return {
             1: "step1_segments.md",
             2: "step2_grid_plan.md",
-            3: "step3_character_clue_tables.md"
+            3: "step3_character_clue_tables.md",
         }
     else:
         return {
             1: "step1_normalized_script.md",
             2: "step2_shot_budget.md",
-            3: "step3_character_clue_tables.md"
+            3: "step3_character_clue_tables.md",
         }
 
 
@@ -333,7 +358,7 @@ def _get_step_title(filename: str) -> str:
         "step1_segments.md": "片段拆分",
         "step2_grid_plan.md": "宫格切分规划",
         # 共用
-        "step3_character_clue_tables.md": "角色表/线索表"
+        "step3_character_clue_tables.md": "角色表/线索表",
     }
     return titles.get(filename, filename)
 
@@ -359,7 +384,9 @@ async def get_draft_content(project_name: str, episode: int, step_num: int):
         if step_num not in step_files:
             raise HTTPException(status_code=400, detail=f"无效的步骤编号: {step_num}")
 
-        draft_path = project_dir / "drafts" / f"episode_{episode}" / step_files[step_num]
+        draft_path = (
+            project_dir / "drafts" / f"episode_{episode}" / step_files[step_num]
+        )
 
         if not draft_path.exists():
             raise HTTPException(status_code=404, detail=f"草稿文件不存在")
@@ -376,7 +403,7 @@ async def update_draft_content(
     project_name: str,
     episode: int,
     step_num: int,
-    content: str = Body(..., media_type="text/plain")
+    content: str = Body(..., media_type="text/plain"),
 ):
     """更新草稿内容"""
     try:
@@ -410,7 +437,9 @@ async def delete_draft(project_name: str, episode: int, step_num: int):
         if step_num not in step_files:
             raise HTTPException(status_code=400, detail=f"无效的步骤编号: {step_num}")
 
-        draft_path = project_dir / "drafts" / f"episode_{episode}" / step_files[step_num]
+        draft_path = (
+            project_dir / "drafts" / f"episode_{episode}" / step_files[step_num]
+        )
 
         if draft_path.exists():
             draft_path.unlink()
@@ -424,11 +453,9 @@ async def delete_draft(project_name: str, episode: int, step_num: int):
 
 # ==================== 风格参考图管理 ====================
 
+
 @router.post("/projects/{project_name}/style-image")
-async def upload_style_image(
-    project_name: str,
-    file: UploadFile = File(...)
-):
+async def upload_style_image(project_name: str, file: UploadFile = File(...)):
     """
     上传风格参考图并分析风格
 
@@ -441,7 +468,7 @@ async def upload_style_image(
     if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的文件类型 {ext}，允许的类型: .png, .jpg, .jpeg, .webp"
+            detail=f"不支持的文件类型 {ext}，允许的类型: .png, .jpg, .jpeg, .webp",
         )
 
     try:
@@ -472,7 +499,7 @@ async def upload_style_image(
             "success": True,
             "style_image": "style_reference.png",
             "style_description": style_description,
-            "url": f"/api/v1/files/{project_name}/style_reference.png"
+            "url": f"/api/v1/files/{project_name}/style_reference.png",
         }
 
     except FileNotFoundError:
@@ -510,8 +537,7 @@ async def delete_style_image(project_name: str):
 
 @router.patch("/projects/{project_name}/style-description")
 async def update_style_description(
-    project_name: str,
-    style_description: str = Body(..., embed=True)
+    project_name: str, style_description: str = Body(..., embed=True)
 ):
     """
     更新风格描述（手动编辑）
