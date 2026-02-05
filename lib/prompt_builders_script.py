@@ -53,11 +53,13 @@ def build_narration_prompt(
 
     prompt = f"""你的任务是为短视频生成分镜剧本。请仔细遵循以下指示：
 
+**重要：所有输出内容必须使用中文。仅 JSON 键名和枚举值使用英文。**
+
 1. 你将获得故事概述、视觉风格、角色列表、线索列表，以及已拆分的小说片段。
 
 2. 为每个片段生成：
-   - image_prompt：第一帧的图像生成提示词
-   - video_prompt：动作和音效的视频生成提示词
+   - image_prompt：第一帧的图像生成提示词（中文描述）
+   - video_prompt：动作和音效的视频生成提示词（中文描述）
 
 <overview>
 {project_overview.get("synopsis", "")}
@@ -104,16 +106,16 @@ c. **clues_in_segment**：列出本片段中涉及的线索名称。
    - 仅包含明确提及或明显暗示的线索
 
 d. **image_prompt**：生成包含以下字段的对象：
-   - scene：描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。
+   - scene：用中文描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。
    - composition：
-     - shot_type：镜头类型（Close-up、Medium Shot、Medium Long Shot、Long Shot 等）
-     - lighting：描述光源、方向和氛围
-     - ambiance：整体氛围，与情绪基调匹配
+     - shot_type：镜头类型（Extreme Close-up, Close-up, Medium Close-up, Medium Shot, Medium Long Shot, Long Shot, Extreme Long Shot, Over-the-shoulder, Point-of-view）
+     - lighting：用中文描述光源、方向和氛围
+     - ambiance：用中文描述整体氛围，与情绪基调匹配
 
 e. **video_prompt**：生成包含以下字段的对象：
-   - action：精确描述该时长内发生的动作。具体描述运动细节。
-   - camera_motion：Static、Pan Left、Pan Right、Tilt Up、Tilt Down、Zoom In、Zoom Out、Tracking Shot
-   - ambiance_audio：仅描述场景内的声音。禁止出现音乐或 BGM。
+   - action：用中文精确描述该时长内发生的动作。具体描述运动细节。
+   - camera_motion：镜头运动（Static, Pan Left, Pan Right, Tilt Up, Tilt Down, Zoom In, Zoom Out, Tracking Shot）
+   - ambiance_audio：用中文描述场景内的声音。禁止出现音乐或 BGM。
    - dialogue：{{speaker, line}} 数组。仅当原文有引号对话时填写。
 
 f. **segment_break**：如果在片段表中标记为"是"，则设为 true。
@@ -121,8 +123,6 @@ f. **segment_break**：如果在片段表中标记为"是"，则设为 true。
 g. **duration_seconds**：使用片段表中的时长（4、6 或 8）。
 
 h. **transition_to_next**：默认为 "cut"。
-
-4. 输出格式为包含所有片段的 JSON 数组。
 
 目标：创建生动、视觉一致的分镜提示词，用于指导 AI 图像和视频生成。保持创意、具体，并忠于原文。
 """
@@ -156,11 +156,13 @@ def build_drama_prompt(
 
     prompt = f"""你的任务是为剧集动画生成分镜剧本。请仔细遵循以下指示：
 
+**重要：所有输出内容必须使用中文。仅 JSON 键名和枚举值使用英文。**
+
 1. 你将获得故事概述、视觉风格、角色列表、线索列表，以及已拆分的场景列表。
 
 2. 为每个场景生成：
-   - image_prompt：第一帧的图像生成提示词
-   - video_prompt：动作和音效的视频生成提示词
+   - image_prompt：第一帧的图像生成提示词（中文描述）
+   - video_prompt：动作和音效的视频生成提示词（中文描述）
 
 <overview>
 {project_overview.get("synopsis", "")}
@@ -205,16 +207,16 @@ b. **clues_in_scene**：列出本场景中涉及的线索名称。
    - 仅包含明确提及或明显暗示的线索
 
 c. **image_prompt**：生成包含以下字段的对象：
-   - scene：描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。16:9 横屏构图。
+   - scene：用中文描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。16:9 横屏构图。
    - composition：
-     - shot_type：镜头类型（Close-up、Medium Shot、Medium Long Shot、Long Shot 等）
-     - lighting：描述光源、方向和氛围
-     - ambiance：整体氛围，与情绪基调匹配
+     - shot_type：镜头类型（Extreme Close-up, Close-up, Medium Close-up, Medium Shot, Medium Long Shot, Long Shot, Extreme Long Shot, Over-the-shoulder, Point-of-view）
+     - lighting：用中文描述光源、方向和氛围
+     - ambiance：用中文描述整体氛围，与情绪基调匹配
 
 d. **video_prompt**：生成包含以下字段的对象：
-   - action：精确描述该时长内发生的动作。具体描述运动细节。
-   - camera_motion：Static、Pan Left、Pan Right、Tilt Up、Tilt Down、Zoom In、Zoom Out、Tracking Shot
-   - ambiance_audio：仅描述场景内的声音。禁止出现音乐或 BGM。
+   - action：用中文精确描述该时长内发生的动作。具体描述运动细节。
+   - camera_motion：镜头运动（Static, Pan Left, Pan Right, Tilt Up, Tilt Down, Zoom In, Zoom Out, Tracking Shot）
+   - ambiance_audio：用中文描述场景内的声音。禁止出现音乐或 BGM。
    - dialogue：{{speaker, line}} 数组。包含角色对话。
 
 e. **segment_break**：如果在场景表中标记为"是"，则设为 true。
