@@ -1,0 +1,232 @@
+"""
+prompt_builders_script.py - 剧本生成 Prompt 构建器
+
+借鉴 Storycraft 的 Prompt 工程技巧：
+1. XML 标签分隔上下文
+2. 明确的字段描述和约束
+3. 可选值列表约束输出
+"""
+
+from typing import Dict, List
+
+
+def _format_character_names(characters: Dict) -> str:
+    """格式化角色列表"""
+    lines = []
+    for name in characters.keys():
+        lines.append(f"- {name}")
+    return "\n".join(lines)
+
+
+def _format_clue_names(clues: Dict) -> str:
+    """格式化线索列表"""
+    lines = []
+    for name in clues.keys():
+        lines.append(f"- {name}")
+    return "\n".join(lines)
+
+
+def build_narration_prompt(
+    project_overview: Dict,
+    style: str,
+    style_description: str,
+    characters: Dict,
+    clues: Dict,
+    segments_md: str,
+) -> str:
+    """
+    构建说书模式的 Prompt
+
+    Args:
+        project_overview: 项目概述（synopsis, genre, theme, world_setting）
+        style: 视觉风格标签
+        style_description: 风格描述
+        characters: 角色字典（仅用于提取名称列表）
+        clues: 线索字典（仅用于提取名称列表）
+        segments_md: Step 1 的 Markdown 内容
+
+    Returns:
+        构建好的 Prompt 字符串
+    """
+    character_names = list(characters.keys())
+    clue_names = list(clues.keys())
+
+    prompt = f"""你的任务是为短视频生成分镜剧本。请仔细遵循以下指示：
+
+1. 你将获得故事概述、视觉风格、角色列表、线索列表，以及已拆分的小说片段。
+
+2. 为每个片段生成：
+   - image_prompt：第一帧的图像生成提示词
+   - video_prompt：动作和音效的视频生成提示词
+
+<overview>
+{project_overview.get("synopsis", "")}
+
+题材类型：{project_overview.get("genre", "")}
+核心主题：{project_overview.get("theme", "")}
+世界观设定：{project_overview.get("world_setting", "")}
+</overview>
+
+<style>
+风格：{style}
+描述：{style_description}
+</style>
+
+<characters>
+{_format_character_names(characters)}
+</characters>
+
+<clues>
+{_format_clue_names(clues)}
+</clues>
+
+<segments>
+{segments_md}
+</segments>
+
+segments 为片段拆分表，每行是一个片段，包含：
+- 片段 ID：格式为 E{{集数}}S{{序号}}
+- 小说原文：必须原样保留到 novel_text 字段
+- 时长：4、6 或 8 秒
+- 是否有对话：用于判断是否需要填写 video_prompt.dialogue
+- 是否为 segment_break：场景切换点，需设置 segment_break 为 true
+
+3. 为每个片段生成时，遵循以下规则：
+
+a. **novel_text**：原样复制小说原文，不做任何修改。
+
+b. **characters_in_segment**：列出本片段中出场的角色名称。
+   - 可选值：[{", ".join(character_names)}]
+   - 仅包含明确提及或明显暗示的角色
+
+c. **clues_in_segment**：列出本片段中涉及的线索名称。
+   - 可选值：[{", ".join(clue_names)}]
+   - 仅包含明确提及或明显暗示的线索
+
+d. **image_prompt**：生成包含以下字段的对象：
+   - scene：描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。
+   - composition：
+     - shot_type：镜头类型（Close-up、Medium Shot、Medium Long Shot、Long Shot 等）
+     - lighting：描述光源、方向和氛围
+     - ambiance：整体氛围，与情绪基调匹配
+
+e. **video_prompt**：生成包含以下字段的对象：
+   - action：精确描述该时长内发生的动作。具体描述运动细节。
+   - camera_motion：Static、Pan Left、Pan Right、Tilt Up、Tilt Down、Zoom In、Zoom Out、Tracking Shot
+   - ambiance_audio：仅描述场景内的声音。禁止出现音乐或 BGM。
+   - dialogue：{{speaker, line}} 数组。仅当原文有引号对话时填写。
+
+f. **segment_break**：如果在片段表中标记为"是"，则设为 true。
+
+g. **duration_seconds**：使用片段表中的时长（4、6 或 8）。
+
+h. **transition_to_next**：默认为 "cut"。
+
+4. 输出格式为包含所有片段的 JSON 数组。
+
+目标：创建生动、视觉一致的分镜提示词，用于指导 AI 图像和视频生成。保持创意、具体，并忠于原文。
+"""
+    return prompt
+
+
+def build_drama_prompt(
+    project_overview: Dict,
+    style: str,
+    style_description: str,
+    characters: Dict,
+    clues: Dict,
+    scenes_md: str,
+) -> str:
+    """
+    构建剧集动画模式的 Prompt
+
+    Args:
+        project_overview: 项目概述
+        style: 视觉风格标签
+        style_description: 风格描述
+        characters: 角色字典
+        clues: 线索字典
+        scenes_md: Step 1 的 Markdown 内容
+
+    Returns:
+        构建好的 Prompt 字符串
+    """
+    character_names = list(characters.keys())
+    clue_names = list(clues.keys())
+
+    prompt = f"""你的任务是为剧集动画生成分镜剧本。请仔细遵循以下指示：
+
+1. 你将获得故事概述、视觉风格、角色列表、线索列表，以及已拆分的场景列表。
+
+2. 为每个场景生成：
+   - image_prompt：第一帧的图像生成提示词
+   - video_prompt：动作和音效的视频生成提示词
+
+<overview>
+{project_overview.get("synopsis", "")}
+
+题材类型：{project_overview.get("genre", "")}
+核心主题：{project_overview.get("theme", "")}
+世界观设定：{project_overview.get("world_setting", "")}
+</overview>
+
+<style>
+风格：{style}
+描述：{style_description}
+</style>
+
+<characters>
+{_format_character_names(characters)}
+</characters>
+
+<clues>
+{_format_clue_names(clues)}
+</clues>
+
+<scenes>
+{scenes_md}
+</scenes>
+
+scenes 为场景拆分表，每行是一个场景，包含：
+- 场景 ID：格式为 E{{集数}}S{{序号}}
+- 场景描述：剧本改编后的场景内容
+- 时长：4、6 或 8 秒（默认 8 秒）
+- 场景类型：剧情、动作、对话等
+- 是否为 segment_break：场景切换点，需设置 segment_break 为 true
+
+3. 为每个场景生成时，遵循以下规则：
+
+a. **characters_in_scene**：列出本场景中出场的角色名称。
+   - 可选值：[{", ".join(character_names)}]
+   - 仅包含明确提及或明显暗示的角色
+
+b. **clues_in_scene**：列出本场景中涉及的线索名称。
+   - 可选值：[{", ".join(clue_names)}]
+   - 仅包含明确提及或明显暗示的线索
+
+c. **image_prompt**：生成包含以下字段的对象：
+   - scene：描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。16:9 横屏构图。
+   - composition：
+     - shot_type：镜头类型（Close-up、Medium Shot、Medium Long Shot、Long Shot 等）
+     - lighting：描述光源、方向和氛围
+     - ambiance：整体氛围，与情绪基调匹配
+
+d. **video_prompt**：生成包含以下字段的对象：
+   - action：精确描述该时长内发生的动作。具体描述运动细节。
+   - camera_motion：Static、Pan Left、Pan Right、Tilt Up、Tilt Down、Zoom In、Zoom Out、Tracking Shot
+   - ambiance_audio：仅描述场景内的声音。禁止出现音乐或 BGM。
+   - dialogue：{{speaker, line}} 数组。包含角色对话。
+
+e. **segment_break**：如果在场景表中标记为"是"，则设为 true。
+
+f. **duration_seconds**：使用场景表中的时长（4、6 或 8），默认为 8。
+
+g. **scene_type**：使用场景表中的场景类型，默认为"剧情"。
+
+h. **transition_to_next**：默认为 "cut"。
+
+4. 输出格式为包含所有场景的 JSON 数组。
+
+目标：创建生动、视觉一致的分镜提示词，用于指导 AI 图像和视频生成。保持创意、具体，适合 16:9 横屏动画呈现。
+"""
+    return prompt
