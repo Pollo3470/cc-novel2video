@@ -1,7 +1,10 @@
 import { state } from "./state.js";
 import { loadProject } from "./actions_project.js";
 import { closeAllModals } from "./ui.js";
-import { initCharacterVersionControls, updateGenerateButton } from "./versions.js";
+import {
+  initCharacterVersionControls,
+  updateGenerateButton,
+} from "./versions.js";
 
 // ==================== 人物管理 ====================
 
@@ -13,6 +16,11 @@ export async function openCharacterModal(charName = null) {
   form.reset();
   document.getElementById("char-image-preview").classList.add("hidden");
   document.getElementById("char-image-version-prompt").classList.add("hidden");
+
+  // 重置参考图区域
+  document.getElementById("char-ref-preview").classList.add("hidden");
+  document.getElementById("char-ref-placeholder").classList.remove("hidden");
+  document.getElementById("char-ref-input").value = "";
 
   let hasImage = false;
 
@@ -27,9 +35,19 @@ export async function openCharacterModal(charName = null) {
 
     if (char.character_sheet) {
       const preview = document.getElementById("char-image-preview");
-      preview.querySelector("img").src = `${API.getFileUrl(state.projectName, char.character_sheet)}?t=${state.cacheBuster}`;
+      preview.querySelector("img").src =
+        `${API.getFileUrl(state.projectName, char.character_sheet)}?t=${state.cacheBuster}`;
       preview.classList.remove("hidden");
       hasImage = true;
+    }
+
+    // 显示参考图（如果有）
+    if (char.reference_image) {
+      const refPreview = document.getElementById("char-ref-preview");
+      refPreview.querySelector("img").src =
+        `${API.getFileUrl(state.projectName, char.reference_image)}?t=${state.cacheBuster}`;
+      refPreview.classList.remove("hidden");
+      document.getElementById("char-ref-placeholder").classList.add("hidden");
     }
 
     // 初始化版本控制
@@ -40,7 +58,8 @@ export async function openCharacterModal(charName = null) {
     document.getElementById("char-original-name").value = "";
 
     // 重置版本选择器
-    document.getElementById("char-image-version").innerHTML = '<option value="">无版本</option>';
+    document.getElementById("char-image-version").innerHTML =
+      '<option value="">无版本</option>';
     updateGenerateButton(document.getElementById("char-generate-btn"), false);
     document.getElementById("char-restore-btn").classList.add("hidden");
   }
@@ -59,6 +78,7 @@ export async function saveCharacter() {
   const description = document.getElementById("char-description").value.trim();
   const voiceStyle = document.getElementById("char-voice").value.trim();
   const imageInput = document.getElementById("char-image-input");
+  const refInput = document.getElementById("char-ref-input");
 
   if (!name || !description) {
     alert("请填写必填字段");
@@ -66,29 +86,68 @@ export async function saveCharacter() {
   }
 
   try {
-    // 如果有新图片，先上传
+    // 如果有新参考图，先上传
+    let referenceImage = null;
+    if (refInput.files.length > 0) {
+      const result = await API.uploadFile(
+        state.projectName,
+        "character_ref",
+        refInput.files[0],
+        name,
+      );
+      referenceImage = result.path;
+    }
+
+    // 如果有新设计图，上传
     let characterSheet = null;
     if (imageInput.files.length > 0) {
-      const result = await API.uploadFile(state.projectName, "character", imageInput.files[0], name);
+      const result = await API.uploadFile(
+        state.projectName,
+        "character",
+        imageInput.files[0],
+        name,
+      );
       characterSheet = result.path;
     }
 
     if (mode === "add") {
       await API.addCharacter(state.projectName, name, description, voiceStyle);
+      if (referenceImage) {
+        await API.updateCharacter(state.projectName, name, {
+          reference_image: referenceImage,
+        });
+      }
       if (characterSheet) {
-        await API.updateCharacter(state.projectName, name, { character_sheet: characterSheet });
+        await API.updateCharacter(state.projectName, name, {
+          character_sheet: characterSheet,
+        });
       }
     } else {
       // 编辑模式
       if (originalName !== name) {
         // 名称变更，需要先删除旧的再添加新的
         await API.deleteCharacter(state.projectName, originalName);
-        await API.addCharacter(state.projectName, name, description, voiceStyle);
+        await API.addCharacter(
+          state.projectName,
+          name,
+          description,
+          voiceStyle,
+        );
       } else {
-        await API.updateCharacter(state.projectName, name, { description, voice_style: voiceStyle });
+        await API.updateCharacter(state.projectName, name, {
+          description,
+          voice_style: voiceStyle,
+        });
+      }
+      if (referenceImage) {
+        await API.updateCharacter(state.projectName, name, {
+          reference_image: referenceImage,
+        });
       }
       if (characterSheet) {
-        await API.updateCharacter(state.projectName, name, { character_sheet: characterSheet });
+        await API.updateCharacter(state.projectName, name, {
+          character_sheet: characterSheet,
+        });
       }
     }
 
@@ -110,3 +169,56 @@ export async function deleteCharacter(name) {
   }
 }
 
+// 初始化参考图上传区域
+export function initCharacterRefUpload() {
+  const dropZone = document.getElementById("char-ref-drop");
+  const input = document.getElementById("char-ref-input");
+  const preview = document.getElementById("char-ref-preview");
+  const placeholder = document.getElementById("char-ref-placeholder");
+
+  if (!dropZone || !input) return;
+
+  // 点击上传
+  dropZone.addEventListener("click", () => input.click());
+
+  // 文件选择
+  input.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      showRefPreview(file);
+    }
+  });
+
+  // 拖拽上传
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("border-blue-500");
+  });
+
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("border-blue-500");
+  });
+
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("border-blue-500");
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) {
+      // 设置到 input 以便后续读取
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      showRefPreview(file);
+    }
+  });
+
+  function showRefPreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      preview.querySelector("img").src = e.target.result;
+      preview.classList.remove("hidden");
+      placeholder.classList.add("hidden");
+    };
+    reader.readAsDataURL(file);
+  }
+}
