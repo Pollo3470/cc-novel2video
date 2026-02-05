@@ -2,8 +2,9 @@
 人物管理路由
 """
 
-from typing import Optional
 from pathlib import Path
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -26,6 +27,7 @@ class UpdateCharacterRequest(BaseModel):
     description: Optional[str] = None
     voice_style: Optional[str] = None
     character_sheet: Optional[str] = None
+    reference_image: Optional[str] = None
 
 
 @router.post("/projects/{project_name}/characters")
@@ -33,10 +35,7 @@ async def add_character(project_name: str, req: CreateCharacterRequest):
     """添加人物"""
     try:
         project = pm.add_project_character(
-            project_name,
-            req.name,
-            req.description,
-            req.voice_style
+            project_name, req.name, req.description, req.voice_style
         )
         return {"success": True, "character": project["characters"][req.name]}
     except FileNotFoundError:
@@ -46,7 +45,9 @@ async def add_character(project_name: str, req: CreateCharacterRequest):
 
 
 @router.patch("/projects/{project_name}/characters/{char_name}")
-async def update_character(project_name: str, char_name: str, req: UpdateCharacterRequest):
+async def update_character(
+    project_name: str, char_name: str, req: UpdateCharacterRequest
+):
     """更新人物"""
     try:
         project = pm.load_project(project_name)
@@ -61,6 +62,8 @@ async def update_character(project_name: str, char_name: str, req: UpdateCharact
             char["voice_style"] = req.voice_style
         if req.character_sheet is not None:
             char["character_sheet"] = req.character_sheet
+        if req.reference_image is not None:
+            char["reference_image"] = req.reference_image
 
         pm.save_project(project_name, project)
         return {"success": True, "character": char}
