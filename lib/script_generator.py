@@ -29,7 +29,7 @@ class ScriptGenerator:
     读取 Step 1/2 的 Markdown 中间文件，调用 Gemini 生成最终 JSON 剧本
     """
 
-    MODEL = "gemini-2.5-flash"
+    MODEL = "gemini-3-flash-preview"
 
     def __init__(self, project_path: Union[str, Path]):
         """
