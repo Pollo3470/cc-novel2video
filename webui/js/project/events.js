@@ -1,11 +1,23 @@
-import { deleteProject, loadProject, saveProjectInfo } from "./actions_project.js";
-import { openCharacterModal, saveCharacter } from "./characters.js";
+import {
+  deleteProject,
+  loadProject,
+  saveProjectInfo,
+} from "./actions_project.js";
+import {
+  openCharacterModal,
+  saveCharacter,
+  initCharacterRefUpload,
+} from "./characters.js";
 import { openClueModal, saveClue } from "./clues.js";
 import { saveDraft, toggleDraftMode } from "./drafts.js";
 import { initPromptEditors } from "./prompt_editors.js";
 import { regenerateOverview, saveOverview } from "./overview.js";
 import { saveScene, saveSegment } from "./scenes_segments.js";
-import { handleSourceUpload, newSourceFile, saveSourceFile } from "./source_files.js";
+import {
+  handleSourceUpload,
+  newSourceFile,
+  saveSourceFile,
+} from "./source_files.js";
 import { closeAllModals, closeLightbox, setupImageUpload } from "./ui.js";
 import { setupStyleImageEvents } from "./style_image.js";
 
@@ -47,10 +59,12 @@ export function setupEventListeners() {
   };
 
   // 重新生成概述按钮
-  document.getElementById("regenerate-overview-btn").onclick = () => void regenerateOverview();
+  document.getElementById("regenerate-overview-btn").onclick = () =>
+    void regenerateOverview();
 
   // 人物模态框
-  document.getElementById("add-character-btn").onclick = () => void openCharacterModal();
+  document.getElementById("add-character-btn").onclick = () =>
+    void openCharacterModal();
   document.getElementById("character-form").onsubmit = (e) => {
     e.preventDefault();
     void saveCharacter();
@@ -81,7 +95,14 @@ export function setupEventListeners() {
   });
 
   // 点击背景关闭模态框
-  ["character-modal", "clue-modal", "scene-modal", "segment-modal", "source-modal", "draft-modal"].forEach((id) => {
+  [
+    "character-modal",
+    "clue-modal",
+    "scene-modal",
+    "segment-modal",
+    "source-modal",
+    "draft-modal",
+  ].forEach((id) => {
     document.getElementById(id).onclick = (e) => {
       if (e.target.id === id) closeAllModals();
     };
@@ -107,7 +128,8 @@ export function setupEventListeners() {
 
   // Source 文件管理
   document.getElementById("new-source-btn").onclick = newSourceFile;
-  document.getElementById("source-upload-input").onchange = (e) => void handleSourceUpload(e);
+  document.getElementById("source-upload-input").onchange = (e) =>
+    void handleSourceUpload(e);
   document.getElementById("source-form").onsubmit = (e) => {
     e.preventDefault();
     void saveSourceFile();
@@ -120,14 +142,19 @@ export function setupEventListeners() {
   };
 
   // 草稿编辑/预览模式切换
-  document.getElementById("draft-mode-edit").onclick = () => toggleDraftMode("edit");
-  document.getElementById("draft-mode-preview").onclick = () => toggleDraftMode("preview");
+  document.getElementById("draft-mode-edit").onclick = () =>
+    toggleDraftMode("edit");
+  document.getElementById("draft-mode-preview").onclick = () =>
+    toggleDraftMode("preview");
 
   // Prompt 编辑器初始化（枚举选项/对白按钮）
   initPromptEditors();
 
   // 风格参考图事件
   setupStyleImageEvents();
+
+  // 人物参考图上传事件
+  initCharacterRefUpload();
 }
 
 /**
@@ -137,7 +164,8 @@ export function switchTab(tabName) {
   // 更新按钮样式
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (btn.dataset.tab === tabName) {
-      btn.className = "tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-600 text-white";
+      btn.className =
+        "tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg bg-blue-600 text-white";
     } else {
       btn.className =
         "tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white";
@@ -150,4 +178,3 @@ export function switchTab(tabName) {
   });
   document.getElementById(`tab-${tabName}`).classList.remove("hidden");
 }
-

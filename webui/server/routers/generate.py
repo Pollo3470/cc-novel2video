@@ -8,16 +8,22 @@
 import asyncio
 import os
 import threading
-from typing import Optional, Union, Any
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Any, Optional, Union
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from lib.project_manager import ProjectManager
-from lib.media_generator import MediaGenerator
 from lib.gemini_client import get_shared_rate_limiter
+from lib.media_generator import MediaGenerator
+from lib.project_manager import ProjectManager
 from lib.prompt_builders import build_character_prompt, build_clue_prompt
-from lib.prompt_utils import image_prompt_to_yaml, video_prompt_to_yaml, is_structured_image_prompt, is_structured_video_prompt
+from lib.prompt_utils import (
+    image_prompt_to_yaml,
+    is_structured_image_prompt,
+    is_structured_video_prompt,
+    video_prompt_to_yaml,
+)
 
 router = APIRouter()
 
@@ -117,6 +123,7 @@ def normalize_veo_duration_seconds(duration_seconds: Optional[int]) -> str:
 
 # ==================== 请求模型 ====================
 
+
 class GenerateStoryboardRequest(BaseModel):
     prompt: Union[str, dict]
     script_file: str
@@ -138,11 +145,10 @@ class GenerateClueRequest(BaseModel):
 
 # ==================== 分镜图生成 ====================
 
+
 @router.post("/projects/{project_name}/generate/storyboard/{segment_id}")
 async def generate_storyboard(
-    project_name: str,
-    segment_id: str,
-    req: GenerateStoryboardRequest
+    project_name: str, segment_id: str, req: GenerateStoryboardRequest
 ):
     """
     生成分镜图（首次生成或重新生成）
@@ -159,7 +165,9 @@ async def generate_storyboard(
 
         # 加载剧本获取参考图
         script = pm.load_script(project_name, req.script_file)
-        content_mode = script.get("content_mode", project.get("content_mode", "narration"))
+        content_mode = script.get(
+            "content_mode", project.get("content_mode", "narration")
+        )
 
         # 查找 segment/scene 获取参考角色和线索
         items = script.get("segments" if content_mode == "narration" else "scenes", [])
@@ -171,12 +179,20 @@ async def generate_storyboard(
                 break
 
         if not target_item:
-            raise HTTPException(status_code=404, detail=f"片段/场景 '{segment_id}' 不存在")
+            raise HTTPException(
+                status_code=404, detail=f"片段/场景 '{segment_id}' 不存在"
+            )
 
         # 收集参考图
         reference_images = []
-        chars_field = "characters_in_segment" if content_mode == "narration" else "characters_in_scene"
-        clues_field = "clues_in_segment" if content_mode == "narration" else "clues_in_scene"
+        chars_field = (
+            "characters_in_segment"
+            if content_mode == "narration"
+            else "characters_in_scene"
+        )
+        clues_field = (
+            "clues_in_segment" if content_mode == "narration" else "clues_in_scene"
+        )
 
         for char_name in target_item.get(chars_field, []):
             char_data = project.get("characters", {}).get(char_name, {})
@@ -200,11 +216,18 @@ async def generate_storyboard(
             prompt_text = req.prompt
         elif isinstance(req.prompt, dict):
             if not is_structured_image_prompt(req.prompt):
-                raise HTTPException(status_code=400, detail="prompt 必须是字符串或包含 scene/composition 的对象")
+                raise HTTPException(
+                    status_code=400,
+                    detail="prompt 必须是字符串或包含 scene/composition 的对象",
+                )
             scene_text = str(req.prompt.get("scene", "")).strip()
             if not scene_text:
                 raise HTTPException(status_code=400, detail="prompt.scene 不能为空")
-            composition = req.prompt.get("composition") if isinstance(req.prompt.get("composition"), dict) else {}
+            composition = (
+                req.prompt.get("composition")
+                if isinstance(req.prompt.get("composition"), dict)
+                else {}
+            )
             normalized_prompt = {
                 "scene": scene_text,
                 "composition": {
@@ -213,7 +236,9 @@ async def generate_storyboard(
                     "ambiance": str(composition.get("ambiance", "") or ""),
                 },
             }
-            prompt_text = image_prompt_to_yaml(normalized_prompt, project.get("style", ""))
+            prompt_text = image_prompt_to_yaml(
+                normalized_prompt, project.get("style", "")
+            )
         else:
             raise HTTPException(status_code=400, detail="prompt 必须是字符串或对象")
 
@@ -224,7 +249,7 @@ async def generate_storyboard(
             resource_id=segment_id,
             reference_images=reference_images if reference_images else None,
             aspect_ratio=aspect_ratio,
-            image_size="2K"
+            image_size="2K",
         )
 
         # 更新剧本中的 generated_assets
@@ -233,14 +258,16 @@ async def generate_storyboard(
             script_filename=req.script_file,
             scene_id=segment_id,
             asset_type="storyboard_image",
-            asset_path=f"storyboards/scene_{segment_id}.png"
+            asset_path=f"storyboards/scene_{segment_id}.png",
         )
 
         return {
             "success": True,
             "version": new_version,
             "file_path": f"storyboards/scene_{segment_id}.png",
-            "created_at": generator.versions.get_versions("storyboards", segment_id)["versions"][-1]["created_at"]
+            "created_at": generator.versions.get_versions("storyboards", segment_id)[
+                "versions"
+            ][-1]["created_at"],
         }
 
     except FileNotFoundError as e:
@@ -251,12 +278,9 @@ async def generate_storyboard(
 
 # ==================== 视频生成 ====================
 
+
 @router.post("/projects/{project_name}/generate/video/{segment_id}")
-async def generate_video(
-    project_name: str,
-    segment_id: str,
-    req: GenerateVideoRequest
-):
+async def generate_video(project_name: str, segment_id: str, req: GenerateVideoRequest):
     """
     生成视频（首次生成或重新生成）
 
@@ -278,8 +302,7 @@ async def generate_video(
         storyboard_file = project_path / "storyboards" / f"scene_{segment_id}.png"
         if not storyboard_file.exists():
             raise HTTPException(
-                status_code=400,
-                detail=f"请先生成分镜图 scene_{segment_id}.png"
+                status_code=400, detail=f"请先生成分镜图 scene_{segment_id}.png"
             )
 
         # 兼容 prompt 旧格式（字符串）与新格式（结构化对象）
@@ -288,7 +311,10 @@ async def generate_video(
             prompt_text = req.prompt
         elif isinstance(req.prompt, dict):
             if not is_structured_video_prompt(req.prompt):
-                raise HTTPException(status_code=400, detail="prompt 必须是字符串或包含 action/camera_motion 的对象")
+                raise HTTPException(
+                    status_code=400,
+                    detail="prompt 必须是字符串或包含 action/camera_motion 的对象",
+                )
             action_text = str(req.prompt.get("action", "")).strip()
             if not action_text:
                 raise HTTPException(status_code=400, detail="prompt.action 不能为空")
@@ -296,7 +322,9 @@ async def generate_video(
             if dialogue is None:
                 dialogue = []
             if not isinstance(dialogue, list):
-                raise HTTPException(status_code=400, detail="prompt.dialogue 必须是数组")
+                raise HTTPException(
+                    status_code=400, detail="prompt.dialogue 必须是数组"
+                )
             normalized_dialogue = []
             for item in dialogue:
                 if not isinstance(item, dict):
@@ -325,7 +353,7 @@ async def generate_video(
             resource_id=segment_id,
             start_image=storyboard_file,
             aspect_ratio=aspect_ratio,
-            duration_seconds=duration_seconds
+            duration_seconds=duration_seconds,
         )
 
         # 更新剧本中的 generated_assets
@@ -334,7 +362,7 @@ async def generate_video(
             script_filename=req.script_file,
             scene_id=segment_id,
             asset_type="video_clip",
-            asset_path=f"videos/scene_{segment_id}.mp4"
+            asset_path=f"videos/scene_{segment_id}.mp4",
         )
 
         # 保存 video_uri 用于后续扩展
@@ -344,14 +372,16 @@ async def generate_video(
                 script_filename=req.script_file,
                 scene_id=segment_id,
                 asset_type="video_uri",
-                asset_path=video_uri
+                asset_path=video_uri,
             )
 
         return {
             "success": True,
             "version": new_version,
             "file_path": f"videos/scene_{segment_id}.mp4",
-            "created_at": generator.versions.get_versions("videos", segment_id)["versions"][-1]["created_at"]
+            "created_at": generator.versions.get_versions("videos", segment_id)[
+                "versions"
+            ][-1]["created_at"],
         }
 
     except FileNotFoundError as e:
@@ -364,24 +394,27 @@ async def generate_video(
 
 # ==================== 人物设计图生成 ====================
 
+
 @router.post("/projects/{project_name}/generate/character/{char_name}")
 async def generate_character(
-    project_name: str,
-    char_name: str,
-    req: GenerateCharacterRequest
+    project_name: str, char_name: str, req: GenerateCharacterRequest
 ):
     """
     生成人物设计图（首次生成或重新生成）
 
     使用 MediaGenerator 自动处理版本管理。
+    若人物有 reference_image，自动作为参考图传入。
     """
     try:
         project = pm.load_project(project_name)
+        project_path = pm.get_project_path(project_name)
         generator = get_media_generator(project_name)
 
         # 检查人物是否存在
         if char_name not in project.get("characters", {}):
             raise HTTPException(status_code=404, detail=f"人物 '{char_name}' 不存在")
+
+        char_data = project["characters"][char_name]
 
         # 获取画面比例（人物设计图 3:4）
         aspect_ratio = get_aspect_ratio(project, "characters")
@@ -389,26 +422,41 @@ async def generate_character(
         # 使用共享库构建 Prompt（确保与 Skill 侧一致）
         style = project.get("style", "")
         style_description = project.get("style_description", "")
-        full_prompt = build_character_prompt(char_name, req.prompt, style, style_description)
+        full_prompt = build_character_prompt(
+            char_name, req.prompt, style, style_description
+        )
+
+        # 读取参考图（如果存在）
+        reference_images = None
+        ref_path = char_data.get("reference_image")
+        if ref_path:
+            ref_full_path = project_path / ref_path
+            if ref_full_path.exists():
+                reference_images = [ref_full_path]
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(
             prompt=full_prompt,
             resource_type="characters",
             resource_id=char_name,
+            reference_images=reference_images,
             aspect_ratio=aspect_ratio,
-            image_size="2K"
+            image_size="2K",
         )
 
         # 更新 project.json 中的 character_sheet
-        project["characters"][char_name]["character_sheet"] = f"characters/{char_name}.png"
+        project["characters"][char_name]["character_sheet"] = (
+            f"characters/{char_name}.png"
+        )
         pm.save_project(project_name, project)
 
         return {
             "success": True,
             "version": new_version,
             "file_path": f"characters/{char_name}.png",
-            "created_at": generator.versions.get_versions("characters", char_name)["versions"][-1]["created_at"]
+            "created_at": generator.versions.get_versions("characters", char_name)[
+                "versions"
+            ][-1]["created_at"],
         }
 
     except FileNotFoundError as e:
@@ -419,12 +467,9 @@ async def generate_character(
 
 # ==================== 线索设计图生成 ====================
 
+
 @router.post("/projects/{project_name}/generate/clue/{clue_name}")
-async def generate_clue(
-    project_name: str,
-    clue_name: str,
-    req: GenerateClueRequest
-):
+async def generate_clue(project_name: str, clue_name: str, req: GenerateClueRequest):
     """
     生成线索设计图（首次生成或重新生成）
 
@@ -447,7 +492,9 @@ async def generate_clue(
         style = project.get("style", "")
         style_description = project.get("style_description", "")
         clue_type = clue_data.get("type", "prop")
-        full_prompt = build_clue_prompt(clue_name, req.prompt, clue_type, style, style_description)
+        full_prompt = build_clue_prompt(
+            clue_name, req.prompt, clue_type, style, style_description
+        )
 
         # 使用 MediaGenerator 生成图片（自动处理版本管理）
         _, new_version = await generator.generate_image_async(
@@ -455,7 +502,7 @@ async def generate_clue(
             resource_type="clues",
             resource_id=clue_name,
             aspect_ratio=aspect_ratio,
-            image_size="2K"
+            image_size="2K",
         )
 
         # 更新 project.json 中的 clue_sheet
@@ -466,7 +513,9 @@ async def generate_clue(
             "success": True,
             "version": new_version,
             "file_path": f"clues/{clue_name}.png",
-            "created_at": generator.versions.get_versions("clues", clue_name)["versions"][-1]["created_at"]
+            "created_at": generator.versions.get_versions("clues", clue_name)[
+                "versions"
+            ][-1]["created_at"],
         }
 
     except FileNotFoundError as e:
