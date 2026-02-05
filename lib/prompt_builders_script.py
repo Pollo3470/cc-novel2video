@@ -106,17 +106,25 @@ c. **clues_in_segment**：列出本片段中涉及的线索名称。
    - 仅包含明确提及或明显暗示的线索
 
 d. **image_prompt**：生成包含以下字段的对象：
-   - scene：用中文描述具体场景——人物位置、表情、动作、环境细节。要具体、可视化。一段话。
+   - scene：用中文描述此刻画面中的具体场景——人物位置、姿态、表情、服装细节，以及可见的环境元素和物品。
+     聚焦当下瞬间的可见画面。仅描述摄像机能够捕捉到的具体视觉元素。
+     确保描述避免超出此刻画面的元素。排除比喻、隐喻、抽象情绪词、主观评价、多场景切换等无法直接渲染的描述。
+     画面应自包含，不暗示过去事件或未来发展。
    - composition：
      - shot_type：镜头类型（Extreme Close-up, Close-up, Medium Close-up, Medium Shot, Medium Long Shot, Long Shot, Extreme Long Shot, Over-the-shoulder, Point-of-view）
-     - lighting：用中文描述光源、方向和氛围
-     - ambiance：用中文描述整体氛围，与情绪基调匹配
+     - lighting：用中文描述具体的光源类型、方向和色温（如"左侧窗户透入的暖黄色晨光"）
+     - ambiance：用中文描述可见的环境效果（如"薄雾弥漫"、"尘埃飞扬"），避免抽象情绪词
 
 e. **video_prompt**：生成包含以下字段的对象：
-   - action：用中文精确描述该时长内发生的动作。具体描述运动细节。
+   - action：用中文精确描述该时长内主体的具体动作——身体移动、手势变化、表情转换。
+     聚焦单一连贯动作，确保在指定时长（4/6/8秒）内可完成。
+     排除多场景切换、蒙太奇、快速剪辑等单次生成无法实现的效果。
+     排除比喻性动作描述（如"像蝴蝶般飞舞"）。
    - camera_motion：镜头运动（Static, Pan Left, Pan Right, Tilt Up, Tilt Down, Zoom In, Zoom Out, Tracking Shot）
-   - ambiance_audio：用中文描述场景内的声音。禁止出现音乐或 BGM。
-   - dialogue：{{speaker, line}} 数组。仅当原文有引号对话时填写。
+     每个片段仅选择一种镜头运动。
+   - ambiance_audio：用中文描述画内音（diegetic sound）——环境声、脚步声、物体声音。
+     仅描述场景内真实存在的声音。排除音乐、BGM、旁白、画外音。
+   - dialogue：{{speaker, line}} 数组。仅当原文有引号对话时填写。speaker 必须来自 characters_in_segment。
 
 f. **segment_break**：如果在片段表中标记为"是"，则设为 true。
 
@@ -226,8 +234,6 @@ f. **duration_seconds**：使用场景表中的时长（4、6 或 8），默认�
 g. **scene_type**：使用场景表中的场景类型，默认为"剧情"。
 
 h. **transition_to_next**：默认为 "cut"。
-
-4. 输出格式为包含所有场景的 JSON 数组。
 
 目标：创建生动、视觉一致的分镜提示词，用于指导 AI 图像和视频生成。保持创意、具体，适合 16:9 横屏动画呈现。
 """
