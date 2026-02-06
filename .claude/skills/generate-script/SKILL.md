@@ -10,7 +10,9 @@ description: 使用 Gemini API 生成 JSON 剧本。使用场景：(1) 用户运
 ## 前置条件
 
 1. 项目目录下存在 `project.json`（包含 style、overview、characters、clues）
-2. 已完成 Step 1：`drafts/episode_N/step1_segments.md`
+2. 已完成 Step 1：
+   - narration：`drafts/episode_N/step1_segments.md`
+   - drama：`drafts/episode_N/step1_normalized_script.md`
 3. 已完成 Step 2：角色和线索已写入 `project.json`
 
 ## 用法
