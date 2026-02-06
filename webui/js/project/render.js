@@ -2,6 +2,69 @@ import { state } from "./state.js";
 import { getPromptText } from "./prompt_editors.js";
 import { renderStyleImageSection } from "./style_image.js";
 
+function isTaskActive(task) {
+  const status = String(task?.status || "");
+  return status === "queued" || status === "running";
+}
+
+function resolveTaskScriptFile(task) {
+  const scriptFile = task?.script_file ?? task?.payload?.script_file;
+  return String(scriptFile || "");
+}
+
+function hasActiveStoryboardTask(resourceId, scriptFile) {
+  const resource = String(resourceId || "");
+  const script = String(scriptFile || "");
+
+  return state.projectTasks.some((task) => {
+    if (!isTaskActive(task)) return false;
+    if (String(task?.task_type || "") !== "storyboard") return false;
+    if (String(task?.resource_id || "") !== resource) return false;
+    return resolveTaskScriptFile(task) === script;
+  });
+}
+
+function segmentTaskOverlayHtml() {
+  return `
+    <div class="segment-task-overlay absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded pointer-events-none z-10">
+      <svg class="animate-spin h-7 w-7 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+  `;
+}
+
+function escapeSelectorValue(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
+}
+
+function removeCardPlaceholder(mediaEl) {
+  Array.from(mediaEl.children).forEach((child) => {
+    if (!(child instanceof HTMLElement)) return;
+    if (child.tagName !== "DIV") return;
+    if (child.classList.contains("absolute")) return;
+    if (child.classList.contains("segment-task-overlay")) return;
+    if (child.classList.contains("w-full") && child.classList.contains("h-full") && child.classList.contains("flex")) {
+      child.remove();
+    }
+  });
+}
+
+function upsertCardImage(mediaEl, url, alt, objectClass) {
+  let img = mediaEl.querySelector("img");
+  if (!img) {
+    removeCardPlaceholder(mediaEl);
+    img = document.createElement("img");
+    img.alt = alt;
+    img.className = `w-full h-full ${objectClass}`;
+    mediaEl.insertAdjacentElement("afterbegin", img);
+  }
+  img.src = url;
+}
+
 function getPhaseClass(phase) {
   const classes = {
     script: "bg-yellow-600 text-yellow-100",
@@ -413,6 +476,9 @@ function renderGridImages(items, contentMode = "drama") {
 function renderSegmentCard(segment, scriptFile) {
   const assets = segment.generated_assets || {};
   const storyboardUrl = assets.storyboard_image ? `${API.getFileUrl(state.projectName, assets.storyboard_image)}?t=${state.cacheBuster}` : null;
+  const hasLoadingTask = hasActiveStoryboardTask(segment.segment_id, scriptFile);
+  const safeSegmentId = String(segment.segment_id || "").replace(/"/g, "&quot;");
+  const safeScriptFile = String(scriptFile || "").replace(/"/g, "&quot;");
 
   const statusClass =
     {
@@ -428,8 +494,10 @@ function renderSegmentCard(segment, scriptFile) {
 
   return `
         <div class="segment-card bg-gray-700 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+             data-segment-id="${safeSegmentId}"
+             data-script-file="${safeScriptFile}"
              onclick="editSegment('${segment.segment_id}', '${scriptFile}')">
-            <div class="aspect-portrait bg-gray-800 relative">
+            <div class="segment-card-media aspect-portrait bg-gray-800 relative">
                 ${
                   storyboardUrl
                     ? `<img src="${storyboardUrl}" alt="${segment.segment_id}" class="w-full h-full object-cover">`
@@ -437,6 +505,7 @@ function renderSegmentCard(segment, scriptFile) {
                          <span class="text-2xl">🎬</span>
                        </div>`
                 }
+                ${hasLoadingTask ? segmentTaskOverlayHtml() : ""}
                 <div class="absolute top-2 left-2 px-2 py-0.5 text-xs rounded ${statusClass}">${segment.segment_id}</div>
                 <div class="absolute bottom-2 right-2 px-2 py-0.5 bg-black bg-opacity-70 text-xs rounded">${segment.duration_seconds || 4}s</div>
                 ${segment.segment_break ? `<div class="absolute bottom-2 left-2 px-2 py-0.5 bg-orange-600 text-xs rounded">转场</div>` : ""}
@@ -506,6 +575,9 @@ function renderSceneCard(scene, scriptFile) {
   const assets = scene.generated_assets || {};
   const storyboardUrl = assets.storyboard_image ? `${API.getFileUrl(state.projectName, assets.storyboard_image)}?t=${state.cacheBuster}` : null;
   const videoUrl = assets.video_clip ? `${API.getFileUrl(state.projectName, assets.video_clip)}?t=${state.cacheBuster}` : null;
+  const hasLoadingTask = hasActiveStoryboardTask(scene.scene_id, scriptFile);
+  const safeSceneId = String(scene.scene_id || "").replace(/"/g, "&quot;");
+  const safeScriptFile = String(scriptFile || "").replace(/"/g, "&quot;");
 
   const statusClass =
     {
@@ -515,8 +587,11 @@ function renderSceneCard(scene, scriptFile) {
     }[assets.status] || "bg-gray-600";
 
   return `
-        <div class="bg-gray-700 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all" onclick="editScene('${scene.scene_id}', '${scriptFile}')">
-            <div class="aspect-video bg-gray-800 relative">
+        <div class="scene-card bg-gray-700 rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+             data-scene-id="${safeSceneId}"
+             data-script-file="${safeScriptFile}"
+             onclick="editScene('${scene.scene_id}', '${scriptFile}')">
+            <div class="scene-card-media aspect-video bg-gray-800 relative">
                 ${
                   storyboardUrl
                     ? `<img src="${storyboardUrl}" alt="${scene.scene_id}" class="w-full h-full object-cover">`
@@ -524,6 +599,7 @@ function renderSceneCard(scene, scriptFile) {
                          <span>${scene.scene_id}</span>
                        </div>`
                 }
+                ${hasLoadingTask ? segmentTaskOverlayHtml() : ""}
                 ${videoUrl ? `<div class="absolute bottom-2 right-2 px-2 py-0.5 bg-green-600 text-xs rounded">🎬</div>` : ""}
                 <div class="absolute top-2 left-2 px-2 py-0.5 text-xs rounded ${statusClass}">${scene.scene_id}</div>
                 ${scene.segment_break ? `<div class="absolute top-2 right-2 px-2 py-0.5 bg-orange-600 text-xs rounded">转场</div>` : ""}
@@ -545,3 +621,73 @@ export function updateCounts() {
   document.getElementById("episodes-count").textContent = (state.currentProject?.episodes || []).length;
 }
 
+export function refreshSegmentTaskLoadingStates() {
+  const cards = document.querySelectorAll(".segment-card[data-segment-id][data-script-file]");
+  cards.forEach((card) => {
+    const media = card.querySelector(".segment-card-media");
+    if (!media) return;
+
+    const segmentId = card.dataset.segmentId || "";
+    const scriptFile = card.dataset.scriptFile || "";
+    const shouldShow = hasActiveStoryboardTask(segmentId, scriptFile);
+    const overlay = media.querySelector(".segment-task-overlay");
+
+    if (shouldShow) {
+      if (!overlay) {
+        media.insertAdjacentHTML("beforeend", segmentTaskOverlayHtml());
+      }
+    } else if (overlay) {
+      overlay.remove();
+    }
+  });
+
+  const sceneCards = document.querySelectorAll(".scene-card[data-scene-id][data-script-file]");
+  sceneCards.forEach((card) => {
+    const media = card.querySelector(".scene-card-media");
+    if (!media) return;
+
+    const sceneId = card.dataset.sceneId || "";
+    const scriptFile = card.dataset.scriptFile || "";
+    const shouldShow = hasActiveStoryboardTask(sceneId, scriptFile);
+    const overlay = media.querySelector(".segment-task-overlay");
+
+    if (shouldShow) {
+      if (!overlay) {
+        media.insertAdjacentHTML("beforeend", segmentTaskOverlayHtml());
+      }
+    } else if (overlay) {
+      overlay.remove();
+    }
+  });
+}
+
+export function applyStoryboardTaskResult(task) {
+  if (!task || String(task.task_type || "") !== "storyboard") return;
+  if (String(task.status || "") !== "succeeded") return;
+
+  const resourceId = String(task.resource_id || "");
+  const scriptFile = resolveTaskScriptFile(task);
+  if (!resourceId || !scriptFile) return;
+
+  const filePath = task?.result?.file_path || `storyboards/scene_${resourceId}.png`;
+  state.cacheBuster = Date.now();
+  const url = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+
+  const segmentSelector = `.segment-card[data-segment-id="${escapeSelectorValue(resourceId)}"][data-script-file="${escapeSelectorValue(scriptFile)}"]`;
+  const segmentCard = document.querySelector(segmentSelector);
+  if (segmentCard) {
+    const media = segmentCard.querySelector(".segment-card-media");
+    if (media) {
+      upsertCardImage(media, url, resourceId, "object-cover");
+    }
+  }
+
+  const sceneSelector = `.scene-card[data-scene-id="${escapeSelectorValue(resourceId)}"][data-script-file="${escapeSelectorValue(scriptFile)}"]`;
+  const sceneCard = document.querySelector(sceneSelector);
+  if (sceneCard) {
+    const media = sceneCard.querySelector(".scene-card-media");
+    if (media) {
+      upsertCardImage(media, url, resourceId, "object-cover");
+    }
+  }
+}

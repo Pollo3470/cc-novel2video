@@ -16,6 +16,12 @@ import argparse
 import sys
 from pathlib import Path
 
+from lib.generation_queue_client import (
+    TaskFailedError,
+    WorkerOfflineError,
+    enqueue_and_wait,
+    is_worker_online,
+)
 from lib.media_generator import MediaGenerator
 from lib.project_manager import ProjectManager
 from lib.prompt_builders import build_clue_prompt
@@ -60,6 +66,28 @@ def generate_clue(
     print(f"🎨 正在生成线索设计图: {clue_name}")
     print(f"   类型: {clue_type}")
     print(f"   描述: {description[:50]}..." if len(description) > 50 else f"   描述: {description}")
+
+    if is_worker_online():
+        try:
+            queued = enqueue_and_wait(
+                project_name=project_name,
+                task_type="clue",
+                media_type="image",
+                resource_id=clue_name,
+                payload={"prompt": description},
+                source="skill",
+            )
+            result = queued.get("result") or {}
+            relative_path = result.get("file_path") or f"clues/{clue_name}.png"
+            output_path = project_dir / relative_path
+            version = result.get("version")
+            version_text = f" (版本 v{version})" if version is not None else ""
+            print(f"✅ 线索设计图已保存: {output_path}{version_text}")
+            return output_path
+        except WorkerOfflineError:
+            print("ℹ️  未检测到队列 worker，回退直连生成")
+        except TaskFailedError as exc:
+            raise RuntimeError(f"队列任务执行失败: {exc}") from exc
 
     output_path, version = generator.generate_image(
         prompt=prompt,

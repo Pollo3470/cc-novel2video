@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>任务队列 - 视频项目管理</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            gray: {
+                                900: "#0f0f0f",
+                                800: "#1a1a1a",
+                                700: "#2a2a2a",
+                                600: "#3a3a3a",
+                            },
+                        },
+                    },
+                },
+            };
+        </script>
+        <link rel="stylesheet" href="/css/styles.css" />
+    </head>
+    <body class="bg-gray-900 text-white min-h-screen">
+        <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-4">
+                        <a
+                            href="/"
+                            class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                        >
+                            <svg
+                                class="h-5 w-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                                />
+                            </svg>
+                        </a>
+                        <h1 class="text-xl font-semibold">全局任务队列</h1>
+                    </div>
+                    <button
+                        id="refresh-btn"
+                        class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
+                    >
+                        刷新
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <div class="text-xs text-gray-400">排队中</div>
+                    <div id="stat-queued" class="text-2xl font-semibold text-yellow-300 mt-1">0</div>
+                </div>
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <div class="text-xs text-gray-400">执行中</div>
+                    <div id="stat-running" class="text-2xl font-semibold text-blue-300 mt-1">0</div>
+                </div>
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <div class="text-xs text-gray-400">成功</div>
+                    <div id="stat-succeeded" class="text-2xl font-semibold text-green-300 mt-1">0</div>
+                </div>
+                <div class="bg-gray-800 rounded-lg p-4">
+                    <div class="text-xs text-gray-400">失败</div>
+                    <div id="stat-failed" class="text-2xl font-semibold text-red-300 mt-1">0</div>
+                </div>
+            </section>
+
+            <section class="bg-gray-800 rounded-lg p-4 mb-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <select
+                        id="filter-project"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    >
+                        <option value="">全部项目</option>
+                    </select>
+                    <select
+                        id="filter-status"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    >
+                        <option value="">全部状态</option>
+                        <option value="queued">queued</option>
+                        <option value="running">running</option>
+                        <option value="succeeded">succeeded</option>
+                        <option value="failed">failed</option>
+                    </select>
+                    <select
+                        id="filter-task-type"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    >
+                        <option value="">全部类型</option>
+                        <option value="storyboard">storyboard</option>
+                        <option value="video">video</option>
+                        <option value="character">character</option>
+                        <option value="clue">clue</option>
+                        <option value="storyboard_grid">storyboard_grid</option>
+                    </select>
+                    <select
+                        id="filter-time"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                    >
+                        <option value="all">全部时间</option>
+                        <option value="1h">最近1小时</option>
+                        <option value="24h">最近24小时</option>
+                        <option value="7d">最近7天</option>
+                    </select>
+                </div>
+            </section>
+
+            <section class="bg-gray-800 rounded-lg p-4">
+                <div id="queue-empty" class="text-sm text-gray-500 py-8 text-center">
+                    暂无任务
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="text-gray-400 border-b border-gray-700">
+                            <tr>
+                                <th class="px-3 py-2">任务ID</th>
+                                <th class="px-3 py-2">项目</th>
+                                <th class="px-3 py-2">类型</th>
+                                <th class="px-3 py-2">资源</th>
+                                <th class="px-3 py-2">状态</th>
+                                <th class="px-3 py-2">开始时间</th>
+                                <th class="px-3 py-2">结束时间</th>
+                                <th class="px-3 py-2">结果/错误</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-task-list"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <script src="/js/toast.js"></script>
+        <script src="/js/api.js"></script>
+        <script src="/js/queue.js"></script>
+    </body>
+</html>

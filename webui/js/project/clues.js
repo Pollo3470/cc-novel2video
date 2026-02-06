@@ -9,10 +9,14 @@ export async function openClueModal(clueName = null) {
   const modal = document.getElementById("clue-modal");
   const form = document.getElementById("clue-form");
   const title = document.getElementById("clue-modal-title");
+  const generateBtn = document.getElementById("clue-generate-btn");
+  const loadingEl = document.getElementById("clue-image-loading");
 
   form.reset();
   document.getElementById("clue-image-preview").classList.add("hidden");
   document.getElementById("clue-image-version-prompt").classList.add("hidden");
+  loadingEl.classList.add("hidden");
+  generateBtn.onclick = null;
 
   let hasImage = false;
 
@@ -33,6 +37,9 @@ export async function openClueModal(clueName = null) {
       hasImage = true;
     }
 
+    // 先重置按钮状态，避免显示上一个线索任务的 loading 样式
+    updateGenerateButton(generateBtn, hasImage, false);
+
     // 初始化版本控制
     await initClueVersionControls(clueName, hasImage);
   } else {
@@ -42,7 +49,8 @@ export async function openClueModal(clueName = null) {
 
     // 重置版本选择器
     document.getElementById("clue-image-version").innerHTML = '<option value="">无版本</option>';
-    updateGenerateButton(document.getElementById("clue-generate-btn"), false);
+    updateGenerateButton(generateBtn, false);
+    generateBtn.onclick = () => alert("请先保存线索后再生成设计图");
     document.getElementById("clue-restore-btn").classList.add("hidden");
   }
 
@@ -109,4 +117,3 @@ export async function deleteClue(name) {
     alert("删除失败: " + error.message);
   }
 }
-

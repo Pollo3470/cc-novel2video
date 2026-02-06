@@ -12,10 +12,14 @@ export async function openCharacterModal(charName = null) {
   const modal = document.getElementById("character-modal");
   const form = document.getElementById("character-form");
   const title = document.getElementById("character-modal-title");
+  const generateBtn = document.getElementById("char-generate-btn");
+  const loadingEl = document.getElementById("char-image-loading");
 
   form.reset();
   document.getElementById("char-image-preview").classList.add("hidden");
   document.getElementById("char-image-version-prompt").classList.add("hidden");
+  loadingEl.classList.add("hidden");
+  generateBtn.onclick = null;
 
   // 重置参考图区域
   document.getElementById("char-ref-preview").classList.add("hidden");
@@ -41,6 +45,9 @@ export async function openCharacterModal(charName = null) {
       hasImage = true;
     }
 
+    // 先重置按钮状态，避免显示上一个人物任务的 loading 样式
+    updateGenerateButton(generateBtn, hasImage, false);
+
     // 显示参考图（如果有）
     if (char.reference_image) {
       const refPreview = document.getElementById("char-ref-preview");
@@ -60,7 +67,8 @@ export async function openCharacterModal(charName = null) {
     // 重置版本选择器
     document.getElementById("char-image-version").innerHTML =
       '<option value="">无版本</option>';
-    updateGenerateButton(document.getElementById("char-generate-btn"), false);
+    updateGenerateButton(generateBtn, false);
+    generateBtn.onclick = () => alert("请先保存人物后再生成设计图");
     document.getElementById("char-restore-btn").classList.add("hidden");
   }
 

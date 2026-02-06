@@ -22,5 +22,16 @@ export const state = {
     characters: {},
     clues: {},
   },
-};
 
+  // 任务队列状态缓存
+  taskStream: null,
+  taskStreamLastEventId: 0,
+  projectTasks: [],
+  taskStats: {
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    total: 0,
+  },
+};
