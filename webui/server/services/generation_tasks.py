@@ -222,7 +222,7 @@ def execute_storyboard_task(project_name: str, resource_id: str, payload: Dict[s
 
     target_item = None
     for item in items:
-        if item.get(id_field) == resource_id:
+        if str(item.get(id_field)) == resource_id:
             target_item = item
             break
 
