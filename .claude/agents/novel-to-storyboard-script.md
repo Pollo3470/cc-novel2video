@@ -39,7 +39,10 @@ model: opus
 5. **保存中间文件**：使用 Write 工具将规范化剧本保存为 Markdown 文件
    - 路径: `projects/{项目名}/drafts/episode_{集数}/step1_normalized_script.md`
    - 内容: 上述规范化剧本的完整 Markdown 格式（表格或结构化文本）
-6. 完成后询问用户："Step 1 规范化剧本已完成，共 X 个场景，已保存到 drafts/episode_{N}/step1_normalized_script.md。请审核后确认是否继续 Step 2。"
+6. **生成 generate-script 输入**：将同一份内容另存为 `step1_segments.md` 供 Step 4 调用
+   - 路径: `projects/{项目名}/drafts/episode_{集数}/step1_segments.md`
+   - 内容: 与 `step1_normalized_script.md` 相同的规范化剧本
+7. 完成后询问用户："Step 1 规范化剧本已完成，共 X 个场景，已保存到 drafts/episode_{N}/step1_normalized_script.md 和 step1_segments.md。请审核后确认是否继续 Step 2。"
 
 ### Step 2：镜头数与分布
 
@@ -147,7 +150,7 @@ model: opus
 
 **执行要求**：
 1. 确认 Step 1、2、3 已完成：
-   - `drafts/episode_{N}/step1_normalized_script.md` 存在
+   - `drafts/episode_{N}/step1_segments.md` 存在
    - `drafts/episode_{N}/step2_shot_budget.md` 存在
    - 角色和线索已写入 `project.json`
 
