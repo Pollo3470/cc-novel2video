@@ -136,178 +136,24 @@ model: opus
 
 ### Step 3：生成 JSON 剧本
 
-**目标**：生成最终的结构化剧本 JSON 文件（说书模式专用 segments 结构）。
+**目标**：使用 generate-script skill 生成最终的结构化剧本 JSON 文件。
 
 **执行要求**：
-1. 结合 Step 1（片段拆分含 segment_break 标记）、Step 2（角色表/线索表）
-2. **使用 segments 结构**（说书模式），而非 scenes 结构
-3. 生成符合以下结构的 JSON 文件，字符串值注意 JSON 转义：
+1. 确认 Step 1 和 Step 2 已完成：
+   - `drafts/episode_{N}/step1_segments.md` 存在
+   - 角色和线索已写入 `project.json`
 
-```json
-{
-  "episode": 1,
-  "title": "剧集标题",
-  "content_mode": "narration",
-  "duration_seconds": 60,
-  "summary": "剧集简介",
-  "novel": {
-    "title": "小说名称",
-    "chapter": "章节名",
-    "source_file": "source/文件名.txt"
-  },
-  "segments": [
-    {
-      "segment_id": "E1S01",
-      "episode": 1,
-      "duration_seconds": 4,
-      "segment_break": false,
-
-      "novel_text": "[原文内容]",
-
-      "characters_in_segment": ["[角色名称（需要在project.json中存在）]"],
-      "clues_in_segment": ["线索名称（需要在project.json中存在）"],
-
-      "image_prompt": {
-        "scene": "[场景环境描述：包含地点、氛围、关键视觉元素的叙述性描述]",
-        "composition": {
-          "shot_type": "[镜头类型：Extreme Close-up / Close-up / Medium Close-up / Medium Shot / Medium Long Shot / Long Shot / Extreme Long Shot / Over-the-shoulder / Point-of-view]",
-          "lighting": "[光线描述：光源方向、色温、阴影特征]",
-          "ambiance": "[氛围描述：色调、情绪、环境效果如雾气、尘埃等]"
-        }
-      },
-
-      "video_prompt": {
-        "action": "[动作描述：主体在片段时长内的具体动作、姿态、表情变化]",
-        "camera_motion": "[摄像机运动：Static / Pan Left / Pan Right / Tilt Up / Tilt Down / Zoom In / Zoom Out / Tracking Shot]",
-        "ambiance_audio": "[环境音效：仅描述 diegetic sound（画内音），不包含音乐或旁白]",
-        "dialogue": [
-          {
-            "speaker": "[角色名，来自 characters_in_segment]",
-            "line": "[对话内容，仅当 novel_text 包含角色对话时填写]"
-          }
-        ]
-      },
-
-      "transition_to_next": "cut",
-
-      "generated_assets": {
-        "storyboard_image": null,
-        "video_clip": null,
-        "video_uri": null,
-        "status": "pending"
-      }
-    }
-  ]
-}
-```
-
-4. **关键字段说明**：
-   - `content_mode`: 必须设为 `"narration"`
-   - `novel_text`: 小说原文（用于后期人工配音，不参与视频生成）
-   - `image_prompt`: 分镜图生成 Prompt（直接用于 Gemini API）
-   - `video_prompt`: 视频生成 Prompt（直接用于 Veo API）
-   - `duration_seconds`: 仅支持 4/6/8 秒
-
-5. **image_prompt 设计指南（结构化格式）**：
-
-   **结构定义**：
-   ```json
-   {
-     "scene": "[场景环境描述]",
-     "composition": {
-       "shot_type": "[镜头类型]",
-       "lighting": "[光线描述]",
-       "ambiance": "[氛围描述]"
-     }
-   }
+2. 调用 generate-script skill 生成剧本：
+   ```bash
+   python .claude/skills/generate-script/scripts/generate_script.py {项目名} --episode {N}
    ```
 
-   **字段说明**：
-   - `scene`：场景环境的叙述性描述，包含地点、关键视觉元素、人物姿态
-   - `shot_type`：从以下选项中选择：
-     - `Extreme Close-up`（大特写）：面部局部或物体细节
-     - `Close-up`（特写）：面部或重要物体
-     - `Medium Close-up`（中近景）：头部到胸部
-     - `Medium Shot`（中景）：头部到腰部
-     - `Medium Long Shot`（中远景）：头部到膝盖
-     - `Long Shot`（远景）：全身可见
-     - `Extreme Long Shot`（大远景）：人物在环境中很小
-     - `Over-the-shoulder`（过肩镜头）：从一个角色肩后看另一个角色
-     - `Point-of-view`（主观镜头）：从角色视角看
-   - `lighting`：光源方向、色温、阴影特征
-   - `ambiance`：色调、情绪、环境效果
+3. 验证生成结果：
+   - 检查 `scripts/episode_{N}.json` 是否生成
+   - 确认剧本通过数据验证
 
-   **注意**：
-   - **Style（风格）** 由项目级 project.json 的 style 字段统一决定，不在每个 segment 中填写
-   - **人物和线索** 通过 characters_in_segment / clues_in_segment 字段引用，不在 image_prompt 中重复
-   - 画面比例不写入 prompt（通过 API 参数设置）
-
-6. **video_prompt 设计指南（结构化格式）**：
-
-   **结构定义**：
-   ```json
-   {
-     "action": "[动作描述]",
-     "camera_motion": "[摄像机运动]",
-     "ambiance_audio": "[环境音效]",
-     "dialogue": [{"speaker": "[角色名]", "line": "[台词]"}]
-   }
-   ```
-
-   **字段说明**：
-   - `action`：主体在片段时长内的具体动作、姿态、表情变化
-   - `camera_motion`：从以下选项中选择：
-     - `Static`（静止）：摄像机固定不动
-     - `Pan Left`（左摇）：摄像机水平向左转动
-     - `Pan Right`（右摇）：摄像机水平向右转动
-     - `Tilt Up`（上摇）：摄像机垂直向上转动
-     - `Tilt Down`（下摇）：摄像机垂直向下转动
-     - `Zoom In`（推进）：镜头拉近
-     - `Zoom Out`（拉远）：镜头拉远
-     - `Tracking Shot`（跟踪）：摄像机跟随主体移动
-   - `ambiance_audio`（可选）：仅描述 diegetic sound（画内音）- 环境声、脚步声、物体声音，**不包含音乐或旁白**
-   - `dialogue`（可选）：对话列表，仅当 novel_text 包含角色对话时填写
-     - `speaker`：角色名（必须来自 characters_in_segment）
-     - `line`：对话内容
-
-   **说书模式特别注意**：
-   - **不写入旁白**：novel_text 由后期人工配音，不写入 video_prompt
-   - **仅写入对话**：只有当 novel_text 包含角色对话时才填写 dialogue 数组
-   - **无对话时**：dialogue 字段为空数组 `[]`
-
-7. **segment_break 设置**：
-   - 根据 Step 1 的片段拆分表设置 `segment_break: true`
-   - 直接使用 Step 1 标注的 segment_break 点
-
-8. **数据引用规则**：
-   - `characters_in_segment` 必须只包含 project.json 中已定义的角色
-   - `clues_in_segment` 必须只包含 project.json 中已定义的线索
-
-9. 将生成的 JSON 保存到 `projects/{项目名}/scripts/episode_1.json`
-
-10. **验证并同步数据**：
-    ```python
-    from lib.project_manager import ProjectManager
-    from lib.data_validator import validate_episode
-
-    pm = ProjectManager()
-    # 规范化剧本（补全缺失字段）
-    pm.normalize_script(project_name, script_filename)
-
-    # 验证 episode JSON 数据完整性和引用一致性
-    result = validate_episode(project_name, script_filename)
-    if not result.valid:
-        print(f"❌ 剧本验证失败:\n{result}")
-        # 必须修复错误后才能继续
-    else:
-        print("✅ 剧本验证通过")
-
-    # 同步剧集信息到 project.json（确保 WebUI 正确显示）
-    pm.sync_episode_from_script(project_name, script_filename)
-    ```
-
-11. 完成后向用户报告：
-    > "Step 3 剧本已生成并保存到 scripts/episode_1.json。共包含 X 个片段（约 Y 分钟）。剧本已通过数据验证。您可以使用 /generate-characters 和 /generate-clues 命令继续生成人物和线索设计图。"
+4. 完成后向用户报告：
+   > "Step 3 剧本已使用 Gemini API 生成并保存到 scripts/episode_{N}.json。共包含 X 个片段（约 Y 分钟）。您可以使用 /generate-characters 和 /generate-clues 命令继续生成人物和线索设计图。"
 
 ## 质量控制原则
 

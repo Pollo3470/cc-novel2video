@@ -1,11 +1,11 @@
 ---
 name: generate-script
-description: 使用 Gemini API 生成 JSON 剧本。使用场景：(1) 用户运行 /generate-script 命令，(2) 已完成 Step 1/2 需要生成最终剧本，(3) 用户想用 Gemini 替代 Claude 生成剧本。读取 step1_segments.md 和 project.json，调用 gemini-3-flash-preview 生成符合 Pydantic 模型的 JSON 剧本。
+description: 使用 Gemini API 生成 JSON 剧本。使用场景：(1) 用户运行 /generate-script 命令，(2) 已完成 Step 1/2 需要生成最终剧本。读取 step1_segments.md 和 project.json，调用 gemini-3-flash-preview 生成符合 Pydantic 模型的 JSON 剧本。
 ---
 
 # generate-script
 
-使用 Gemini API 生成 JSON 剧本，替代现有 Agent 流程的 Step 3。
+使用 Gemini API 生成 JSON 剧本。
 
 ## 前置条件
 
