@@ -274,7 +274,7 @@ class API {
     // ==================== 生成 API ====================
 
     /**
-     * 生成分镜图
+     * 生成分镜图（异步入队）
      * @param {string} projectName - 项目名称
      * @param {string} segmentId - 片段/场景 ID
      * @param {string|object} prompt - 图片生成 prompt（支持字符串或结构化对象）
@@ -288,7 +288,7 @@ class API {
     }
 
     /**
-     * 生成视频
+     * 生成视频（异步入队）
      * @param {string} projectName - 项目名称
      * @param {string} segmentId - 片段/场景 ID
      * @param {string|object} prompt - 视频生成 prompt（支持字符串或结构化对象）
@@ -303,7 +303,7 @@ class API {
     }
 
     /**
-     * 生成人物设计图
+     * 生成人物设计图（异步入队）
      * @param {string} projectName - 项目名称
      * @param {string} charName - 人物名称
      * @param {string} prompt - 人物描述 prompt
@@ -316,7 +316,7 @@ class API {
     }
 
     /**
-     * 生成线索设计图
+     * 生成线索设计图（异步入队）
      * @param {string} projectName - 项目名称
      * @param {string} clueName - 线索名称
      * @param {string} prompt - 线索描述 prompt
@@ -326,6 +326,93 @@ class API {
             method: 'POST',
             body: JSON.stringify({ prompt }),
         });
+    }
+
+    // ==================== 任务队列 API ====================
+
+    static async getTask(taskId) {
+        return this.request(`/tasks/${encodeURIComponent(taskId)}`);
+    }
+
+    static async listTasks(filters = {}) {
+        const params = new URLSearchParams();
+        if (filters.projectName) params.append('project_name', filters.projectName);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.taskType) params.append('task_type', filters.taskType);
+        if (filters.source) params.append('source', filters.source);
+        if (filters.page) params.append('page', String(filters.page));
+        if (filters.pageSize) params.append('page_size', String(filters.pageSize));
+        const query = params.toString();
+        return this.request(`/tasks${query ? '?' + query : ''}`);
+    }
+
+    static async listProjectTasks(projectName, filters = {}) {
+        const params = new URLSearchParams();
+        if (filters.status) params.append('status', filters.status);
+        if (filters.taskType) params.append('task_type', filters.taskType);
+        if (filters.source) params.append('source', filters.source);
+        if (filters.page) params.append('page', String(filters.page));
+        if (filters.pageSize) params.append('page_size', String(filters.pageSize));
+        const query = params.toString();
+        return this.request(`/projects/${encodeURIComponent(projectName)}/tasks${query ? '?' + query : ''}`);
+    }
+
+    static async getTaskStats(projectName = null) {
+        const params = new URLSearchParams();
+        if (projectName) params.append('project_name', projectName);
+        const query = params.toString();
+        return this.request(`/tasks/stats${query ? '?' + query : ''}`);
+    }
+
+    static openTaskStream(options = {}) {
+        const params = new URLSearchParams();
+        if (options.projectName) params.append('project_name', options.projectName);
+        const parsedLastEventId = Number(options.lastEventId);
+        if (Number.isFinite(parsedLastEventId) && parsedLastEventId > 0) {
+            params.append('last_event_id', String(parsedLastEventId));
+        }
+
+        const query = params.toString();
+        const url = `${API_BASE}/tasks/stream${query ? '?' + query : ''}`;
+        const source = new EventSource(url);
+
+        const parsePayload = (event) => {
+            try {
+                return JSON.parse(event.data || '{}');
+            } catch (err) {
+                console.error('解析 SSE 数据失败:', err, event.data);
+                return null;
+            }
+        };
+
+        source.addEventListener('snapshot', (event) => {
+            const payload = parsePayload(event);
+            if (payload && typeof options.onSnapshot === 'function') {
+                options.onSnapshot(payload, event);
+            }
+        });
+
+        source.addEventListener('task', (event) => {
+            const payload = parsePayload(event);
+            if (payload && typeof options.onTask === 'function') {
+                options.onTask(payload, event);
+            }
+        });
+
+        source.addEventListener('heartbeat', (event) => {
+            const payload = parsePayload(event);
+            if (payload && typeof options.onHeartbeat === 'function') {
+                options.onHeartbeat(payload, event);
+            }
+        });
+
+        source.onerror = (event) => {
+            if (typeof options.onError === 'function') {
+                options.onError(event);
+            }
+        };
+
+        return source;
     }
 
     // ==================== 版本管理 API ====================

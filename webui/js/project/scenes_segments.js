@@ -2,7 +2,7 @@ import { state } from "./state.js";
 import { loadProject } from "./actions_project.js";
 import { closeAllModals } from "./ui.js";
 import { collectImagePrompt, collectVideoPrompt, setImagePromptEditor, setVideoPromptEditor } from "./prompt_editors.js";
-import { initSceneVersionControls, initSegmentVersionControls } from "./versions.js";
+import { initSceneVersionControls, initSegmentVersionControls, updateGenerateButton } from "./versions.js";
 
 // ==================== 场景管理 ====================
 
@@ -34,6 +34,11 @@ export async function editSegment(segmentId, scriptFile) {
   const assets = segment.generated_assets || {};
   const storyboardContainer = document.getElementById("segment-storyboard");
   const hasStoryboard = !!assets.storyboard_image;
+  const storyboardLoading = document.getElementById("segment-storyboard-loading");
+  const videoLoading = document.getElementById("segment-video-loading");
+
+  storyboardLoading?.classList.add("hidden");
+  videoLoading?.classList.add("hidden");
 
   if (hasStoryboard) {
     const storyboardUrl = `${API.getFileUrl(state.projectName, assets.storyboard_image)}?t=${state.cacheBuster}`;
@@ -55,6 +60,8 @@ export async function editSegment(segmentId, scriptFile) {
   // 显示视频预览
   const videoContainer = document.getElementById("segment-video");
   const hasVideo = !!assets.video_clip;
+  updateGenerateButton(document.getElementById("segment-generate-storyboard-btn"), hasStoryboard, false);
+  updateGenerateButton(document.getElementById("segment-generate-video-btn"), hasVideo, false);
   if (hasVideo) {
     videoContainer.innerHTML = `<video src="${API.getFileUrl(state.projectName, assets.video_clip)}?t=${state.cacheBuster}" controls class="w-full h-full"></video>`;
   } else {
@@ -128,6 +135,13 @@ export async function editScene(sceneId, scriptFile) {
   const videoContainer = document.getElementById("scene-video");
   const hasStoryboard = !!assets.storyboard_image;
   const hasVideo = !!assets.video_clip;
+  const storyboardLoading = document.getElementById("scene-storyboard-loading");
+  const videoLoading = document.getElementById("scene-video-loading");
+
+  storyboardLoading?.classList.add("hidden");
+  videoLoading?.classList.add("hidden");
+  updateGenerateButton(document.getElementById("scene-generate-storyboard-btn"), hasStoryboard, false);
+  updateGenerateButton(document.getElementById("scene-generate-video-btn"), hasVideo, false);
 
   if (hasStoryboard) {
     const storyboardUrl = `${API.getFileUrl(state.projectName, assets.storyboard_image)}?t=${state.cacheBuster}`;
@@ -189,4 +203,3 @@ export async function saveScene() {
     alert("保存失败: " + error.message);
   }
 }
-

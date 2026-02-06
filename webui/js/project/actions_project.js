@@ -1,5 +1,13 @@
 import { state } from "./state.js";
-import { renderCharacters, renderClues, renderEpisodes, renderOverview, renderProjectHeader, updateCounts } from "./render.js";
+import {
+  refreshSegmentTaskLoadingStates,
+  renderCharacters,
+  renderClues,
+  renderEpisodes,
+  renderOverview,
+  renderProjectHeader,
+  updateCounts,
+} from "./render.js";
 import { renderSourceFiles } from "./source_files.js";
 import { loadUsageStats } from "./usage.js";
 
@@ -34,6 +42,7 @@ export async function loadProject() {
     void renderSourceFiles();
     void loadUsageStats();
     updateCounts();
+    refreshSegmentTaskLoadingStates();
   } catch (error) {
     console.error("加载项目失败:", error);
     alert("加载项目失败: " + error.message);
@@ -82,4 +91,3 @@ export async function deleteProject() {
     alert("删除失败: " + error.message);
   }
 }
-

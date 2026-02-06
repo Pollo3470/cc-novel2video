@@ -12,6 +12,12 @@ import { openDraftModal } from "./project/drafts.js";
 import { setupEventListeners, toggleEpisode } from "./project/events.js";
 import { editSegment, editScene } from "./project/scenes_segments.js";
 import { deleteSourceFile, editSourceFile } from "./project/source_files.js";
+import {
+  refreshProjectTasksSnapshot,
+  renderProjectTaskQueue,
+  startProjectTaskStream,
+  stopProjectTaskStream,
+} from "./project/tasks.js";
 import { closeLightbox, openLightbox } from "./project/ui.js";
 
 function exposeGlobals() {
@@ -43,7 +49,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   exposeGlobals();
+  renderProjectTaskQueue();
   void loadProject();
+  void refreshProjectTasksSnapshot();
+  startProjectTaskStream();
   setupEventListeners();
-});
 
+  window.addEventListener("beforeunload", () => {
+    stopProjectTaskStream();
+  });
+});

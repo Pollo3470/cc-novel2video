@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { collectImagePrompt, collectVideoPrompt } from "./prompt_editors.js";
+import { registerTaskWaiter } from "./tasks.js";
 
 // ==================== 版本管理与生成功能 ====================
 
@@ -98,15 +99,75 @@ function normalizeVeoDurationSeconds(value, fallback = 6) {
   return 8;
 }
 
+function taskErrorMessage(task) {
+  if (!task) return "未知错误";
+  return task.error_message || "未知错误";
+}
+
+function isModalVisible(modalId) {
+  const modal = document.getElementById(modalId);
+  return !!modal && !modal.classList.contains("hidden");
+}
+
+function isActiveSegmentModal(segmentId, scriptFile = null) {
+  if (!isModalVisible("segment-modal")) return false;
+  const currentId = document.getElementById("segment-id")?.value;
+  if (String(currentId || "") !== String(segmentId)) return false;
+  if (scriptFile == null) return true;
+  const currentScriptFile = document.getElementById("segment-script-file")?.value;
+  return String(currentScriptFile || "") === String(scriptFile);
+}
+
+function isActiveSceneModal(sceneId, scriptFile = null) {
+  if (!isModalVisible("scene-modal")) return false;
+  const currentId = document.getElementById("scene-id")?.value;
+  if (String(currentId || "") !== String(sceneId)) return false;
+  if (scriptFile == null) return true;
+  const currentScriptFile = document.getElementById("scene-script-file")?.value;
+  return String(currentScriptFile || "") === String(scriptFile);
+}
+
+function isActiveCharacterModal(charName) {
+  if (!isModalVisible("character-modal")) return false;
+  return isCharacterModalContext(charName);
+}
+
+function isCharacterModalContext(charName) {
+  const mode = document.getElementById("char-edit-mode")?.value;
+  if (mode !== "edit") return false;
+  const currentName = document.getElementById("char-original-name")?.value;
+  return String(currentName || "") === String(charName);
+}
+
+function isActiveClueModal(clueName) {
+  if (!isModalVisible("clue-modal")) return false;
+  return isClueModalContext(clueName);
+}
+
+function isClueModalContext(clueName) {
+  const mode = document.getElementById("clue-edit-mode")?.value;
+  if (mode !== "edit") return false;
+  const currentName = document.getElementById("clue-original-name")?.value;
+  return String(currentName || "") === String(clueName);
+}
+
 // ==================== 片段模态框版本和生成 ====================
 
 /**
  * 初始化片段模态框的版本和生成功能
  */
 export async function initSegmentVersionControls(segmentId, scriptFile, hasStoryboard, hasVideo) {
+  if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+
+  const storyboardBtn = document.getElementById("segment-generate-storyboard-btn");
+  const videoBtn = document.getElementById("segment-generate-video-btn");
+  storyboardBtn.onclick = () => void generateSegmentStoryboard(segmentId, scriptFile);
+  videoBtn.onclick = () => void generateSegmentVideo(segmentId, scriptFile);
+
   // 加载版本列表
   const storyboardVersions = await loadVersions("storyboards", segmentId);
   const videoVersions = await loadVersions("videos", segmentId);
+  if (!isActiveSegmentModal(segmentId, scriptFile)) return;
 
   // 渲染分镜图版本选择器
   const storyboardSelect = document.getElementById("segment-storyboard-version");
@@ -117,18 +178,12 @@ export async function initSegmentVersionControls(segmentId, scriptFile, hasStory
   renderVersionSelector(videoSelect, videoVersions.versions, videoVersions.current_version);
 
   // 更新生成按钮
-  const storyboardBtn = document.getElementById("segment-generate-storyboard-btn");
-  const videoBtn = document.getElementById("segment-generate-video-btn");
   updateGenerateButton(storyboardBtn, hasStoryboard);
   updateGenerateButton(videoBtn, hasVideo);
 
   // 版本选择器事件
   storyboardSelect.onchange = () => void handleSegmentVersionChange("storyboard", segmentId);
   videoSelect.onchange = () => void handleSegmentVersionChange("video", segmentId);
-
-  // 生成按钮事件
-  storyboardBtn.onclick = () => void generateSegmentStoryboard(segmentId, scriptFile);
-  videoBtn.onclick = () => void generateSegmentVideo(segmentId, scriptFile);
 
   // 还原按钮事件
   document.getElementById("segment-restore-storyboard-btn").onclick = () => void restoreSegmentVersion("storyboards", segmentId);
@@ -185,6 +240,8 @@ async function handleSegmentVersionChange(type, segmentId) {
  * 生成片段分镜图
  */
 async function generateSegmentStoryboard(segmentId, scriptFile) {
+  if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+
   const promptResult = collectImagePrompt("segment");
   if (!promptResult.ok) {
     alert(`分镜图 Prompt 格式错误: ${promptResult.error}`);
@@ -195,37 +252,52 @@ async function generateSegmentStoryboard(segmentId, scriptFile) {
   const btn = document.getElementById("segment-generate-storyboard-btn");
   const loadingEl = document.getElementById("segment-storyboard-loading");
   const hadStoryboard = !!document.getElementById("segment-storyboard").querySelector("img");
-  let succeeded = false;
+  updateGenerateButton(btn, hadStoryboard, true);
+  loadingEl.classList.remove("hidden");
 
   try {
-    updateGenerateButton(btn, hadStoryboard, true);
-    loadingEl.classList.remove("hidden");
+    const enqueue = await API.generateStoryboard(state.projectName, segmentId, prompt, scriptFile);
+    registerTaskWaiter(enqueue.task_id, {
+      waiterKey: `segment-storyboard:${scriptFile}:${segmentId}`,
+      onSuccess: (task) => {
+        void (async () => {
+          if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+          state.cacheBuster = Date.now();
+          const hasVideo = !!document.getElementById("segment-video")?.querySelector("video");
+          await initSegmentVersionControls(segmentId, scriptFile, true, hasVideo);
 
-    const result = await API.generateStoryboard(state.projectName, segmentId, prompt, scriptFile);
-    succeeded = true;
+          const filePath = task?.result?.file_path;
+          if (filePath) {
+            const storyboardUrl = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+            document.getElementById("segment-storyboard").innerHTML = `
+                    <div class="relative group w-full h-full">
+                        <img src="${storyboardUrl}" class="w-full h-full object-cover cursor-pointer" onclick="openLightbox('${storyboardUrl}', '分镜图 ${segmentId}')">
+                    </div>`;
+          }
 
-    // 刷新预览和版本列表
-    state.cacheBuster = Date.now();
-    await initSegmentVersionControls(
-      segmentId,
-      scriptFile,
-      true,
-      !!state.currentEditingSegment?.segment?.generated_assets?.video_clip,
-    );
+          updateGenerateButton(btn, true, false);
+          loadingEl.classList.add("hidden");
+          const version = task?.result?.version;
+          alert(version ? `分镜图生成成功！版本: v${version}` : "分镜图生成成功！");
+        })();
+      },
+      onFailed: (task) => {
+        if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+        updateGenerateButton(btn, hadStoryboard, false);
+        loadingEl.classList.add("hidden");
+        alert("生成失败: " + taskErrorMessage(task));
+      },
+    });
 
-    // 更新预览
-    const storyboardUrl = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
-    document.getElementById("segment-storyboard").innerHTML = `
-            <div class="relative group w-full h-full">
-                <img src="${storyboardUrl}" class="w-full h-full object-cover cursor-pointer" onclick="openLightbox('${storyboardUrl}', '分镜图 ${segmentId}')">
-            </div>`;
-
-    alert(`分镜图生成成功！版本: v${result.version}`);
+    if (enqueue.deduped) {
+      alert(`已有进行中的分镜任务，已复用任务 ${enqueue.task_id.slice(0, 10)}。`);
+    } else {
+      alert(`分镜图任务已入队，任务ID: ${enqueue.task_id.slice(0, 10)}`);
+    }
   } catch (error) {
-    alert("生成失败: " + error.message);
-  } finally {
-    updateGenerateButton(btn, succeeded || hadStoryboard, false);
+    updateGenerateButton(btn, hadStoryboard, false);
     loadingEl.classList.add("hidden");
+    alert("入队失败: " + error.message);
   }
 }
 
@@ -233,6 +305,8 @@ async function generateSegmentStoryboard(segmentId, scriptFile) {
  * 生成片段视频
  */
 async function generateSegmentVideo(segmentId, scriptFile) {
+  if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+
   const promptResult = collectVideoPrompt("segment");
   if (!promptResult.ok) {
     alert(`视频 Prompt 格式错误: ${promptResult.error}`);
@@ -244,29 +318,49 @@ async function generateSegmentVideo(segmentId, scriptFile) {
   const btn = document.getElementById("segment-generate-video-btn");
   const loadingEl = document.getElementById("segment-video-loading");
   const hadVideo = !!document.getElementById("segment-video").querySelector("video");
-  let succeeded = false;
+  updateGenerateButton(btn, hadVideo, true);
+  loadingEl.classList.remove("hidden");
 
   try {
-    updateGenerateButton(btn, hadVideo, true);
-    loadingEl.classList.remove("hidden");
+    const enqueue = await API.generateVideo(state.projectName, segmentId, prompt, scriptFile, duration);
+    registerTaskWaiter(enqueue.task_id, {
+      waiterKey: `segment-video:${scriptFile}:${segmentId}`,
+      onSuccess: (task) => {
+        void (async () => {
+          if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+          state.cacheBuster = Date.now();
+          const hasStoryboard = !!document.getElementById("segment-storyboard")?.querySelector("img");
+          await initSegmentVersionControls(segmentId, scriptFile, hasStoryboard, true);
 
-    const result = await API.generateVideo(state.projectName, segmentId, prompt, scriptFile, duration);
-    succeeded = true;
+          const filePath = task?.result?.file_path;
+          if (filePath) {
+            const videoUrl = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+            document.getElementById("segment-video").innerHTML = `<video src="${videoUrl}" controls class="w-full h-full"></video>`;
+          }
 
-    // 刷新版本列表
-    state.cacheBuster = Date.now();
-    await initSegmentVersionControls(segmentId, scriptFile, true, true);
+          updateGenerateButton(btn, true, false);
+          loadingEl.classList.add("hidden");
+          const version = task?.result?.version;
+          alert(version ? `视频生成成功！版本: v${version}` : "视频生成成功！");
+        })();
+      },
+      onFailed: (task) => {
+        if (!isActiveSegmentModal(segmentId, scriptFile)) return;
+        updateGenerateButton(btn, hadVideo, false);
+        loadingEl.classList.add("hidden");
+        alert("生成失败: " + taskErrorMessage(task));
+      },
+    });
 
-    // 更新预览
-    const videoUrl = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
-    document.getElementById("segment-video").innerHTML = `<video src="${videoUrl}" controls class="w-full h-full"></video>`;
-
-    alert(`视频生成成功！版本: v${result.version}`);
+    if (enqueue.deduped) {
+      alert(`已有进行中的视频任务，已复用任务 ${enqueue.task_id.slice(0, 10)}。`);
+    } else {
+      alert(`视频任务已入队，任务ID: ${enqueue.task_id.slice(0, 10)}`);
+    }
   } catch (error) {
-    alert("生成失败: " + error.message);
-  } finally {
-    updateGenerateButton(btn, succeeded || hadVideo, false);
+    updateGenerateButton(btn, hadVideo, false);
     loadingEl.classList.add("hidden");
+    alert("入队失败: " + error.message);
   }
 }
 
@@ -311,22 +405,25 @@ async function restoreSegmentVersion(resourceType, segmentId) {
 // ==================== 场景模态框版本和生成（类似片段） ====================
 
 export async function initSceneVersionControls(sceneId, scriptFile, hasStoryboard, hasVideo) {
+  if (!isActiveSceneModal(sceneId, scriptFile)) return;
+
+  const storyboardBtn = document.getElementById("scene-generate-storyboard-btn");
+  const videoBtn = document.getElementById("scene-generate-video-btn");
+  storyboardBtn.onclick = () => void generateSceneStoryboard(sceneId, scriptFile);
+  videoBtn.onclick = () => void generateSceneVideo(sceneId, scriptFile);
+
   const storyboardVersions = await loadVersions("storyboards", sceneId);
   const videoVersions = await loadVersions("videos", sceneId);
+  if (!isActiveSceneModal(sceneId, scriptFile)) return;
 
   renderVersionSelector(document.getElementById("scene-storyboard-version"), storyboardVersions.versions, storyboardVersions.current_version);
   renderVersionSelector(document.getElementById("scene-video-version"), videoVersions.versions, videoVersions.current_version);
 
-  const storyboardBtn = document.getElementById("scene-generate-storyboard-btn");
-  const videoBtn = document.getElementById("scene-generate-video-btn");
   updateGenerateButton(storyboardBtn, hasStoryboard);
   updateGenerateButton(videoBtn, hasVideo);
 
   document.getElementById("scene-storyboard-version").onchange = () => void handleSceneVersionChange("storyboard", sceneId);
   document.getElementById("scene-video-version").onchange = () => void handleSceneVersionChange("video", sceneId);
-
-  storyboardBtn.onclick = () => void generateSceneStoryboard(sceneId, scriptFile);
-  videoBtn.onclick = () => void generateSceneVideo(sceneId, scriptFile);
 
   document.getElementById("scene-restore-storyboard-btn").onclick = () => void restoreSceneVersion("storyboards", sceneId);
   document.getElementById("scene-restore-video-btn").onclick = () => void restoreSceneVersion("videos", sceneId);
@@ -372,6 +469,8 @@ async function handleSceneVersionChange(type, sceneId) {
 }
 
 async function generateSceneStoryboard(sceneId, scriptFile) {
+  if (!isActiveSceneModal(sceneId, scriptFile)) return;
+
   const promptResult = collectImagePrompt("scene");
   if (!promptResult.ok) {
     alert(`分镜图 Prompt 格式错误: ${promptResult.error}`);
@@ -382,27 +481,55 @@ async function generateSceneStoryboard(sceneId, scriptFile) {
   const btn = document.getElementById("scene-generate-storyboard-btn");
   const loadingEl = document.getElementById("scene-storyboard-loading");
   const hadStoryboard = !!document.getElementById("scene-storyboard").querySelector("img");
-  let succeeded = false;
+  updateGenerateButton(btn, hadStoryboard, true);
+  loadingEl.classList.remove("hidden");
 
   try {
-    updateGenerateButton(btn, hadStoryboard, true);
-    loadingEl.classList.remove("hidden");
-    const result = await API.generateStoryboard(state.projectName, sceneId, prompt, scriptFile);
-    succeeded = true;
-    state.cacheBuster = Date.now();
-    await initSceneVersionControls(sceneId, scriptFile, true, !!document.getElementById("scene-video").querySelector("video"));
-    const url = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
-    document.getElementById("scene-storyboard").innerHTML = `<div class="relative group w-full h-full"><img src="${url}" class="w-full h-full object-contain cursor-pointer" onclick="openLightbox('${url}', '分镜图 ${sceneId}')"></div>`;
-    alert(`分镜图生成成功！版本: v${result.version}`);
+    const enqueue = await API.generateStoryboard(state.projectName, sceneId, prompt, scriptFile);
+    registerTaskWaiter(enqueue.task_id, {
+      waiterKey: `scene-storyboard:${scriptFile}:${sceneId}`,
+      onSuccess: (task) => {
+        void (async () => {
+          if (!isActiveSceneModal(sceneId, scriptFile)) return;
+          state.cacheBuster = Date.now();
+          const hasVideo = !!document.getElementById("scene-video")?.querySelector("video");
+          await initSceneVersionControls(sceneId, scriptFile, true, hasVideo);
+
+          const filePath = task?.result?.file_path;
+          if (filePath) {
+            const url = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+            document.getElementById("scene-storyboard").innerHTML = `<div class="relative group w-full h-full"><img src="${url}" class="w-full h-full object-contain cursor-pointer" onclick="openLightbox('${url}', '分镜图 ${sceneId}')"></div>`;
+          }
+
+          updateGenerateButton(btn, true, false);
+          loadingEl.classList.add("hidden");
+          const version = task?.result?.version;
+          alert(version ? `分镜图生成成功！版本: v${version}` : "分镜图生成成功！");
+        })();
+      },
+      onFailed: (task) => {
+        if (!isActiveSceneModal(sceneId, scriptFile)) return;
+        updateGenerateButton(btn, hadStoryboard, false);
+        loadingEl.classList.add("hidden");
+        alert("生成失败: " + taskErrorMessage(task));
+      },
+    });
+
+    if (enqueue.deduped) {
+      alert(`已有进行中的分镜任务，已复用任务 ${enqueue.task_id.slice(0, 10)}。`);
+    } else {
+      alert(`分镜图任务已入队，任务ID: ${enqueue.task_id.slice(0, 10)}`);
+    }
   } catch (error) {
-    alert("生成失败: " + error.message);
-  } finally {
-    updateGenerateButton(btn, succeeded || hadStoryboard, false);
+    updateGenerateButton(btn, hadStoryboard, false);
     loadingEl.classList.add("hidden");
+    alert("入队失败: " + error.message);
   }
 }
 
 async function generateSceneVideo(sceneId, scriptFile) {
+  if (!isActiveSceneModal(sceneId, scriptFile)) return;
+
   const promptResult = collectVideoPrompt("scene");
   if (!promptResult.ok) {
     alert(`视频 Prompt 格式错误: ${promptResult.error}`);
@@ -416,23 +543,49 @@ async function generateSceneVideo(sceneId, scriptFile) {
   const btn = document.getElementById("scene-generate-video-btn");
   const loadingEl = document.getElementById("scene-video-loading");
   const hadVideo = !!document.getElementById("scene-video").querySelector("video");
-  let succeeded = false;
+  updateGenerateButton(btn, hadVideo, true);
+  loadingEl.classList.remove("hidden");
 
   try {
-    updateGenerateButton(btn, hadVideo, true);
-    loadingEl.classList.remove("hidden");
-    const result = await API.generateVideo(state.projectName, sceneId, prompt, scriptFile, duration);
-    succeeded = true;
-    state.cacheBuster = Date.now();
-    await initSceneVersionControls(sceneId, scriptFile, true, true);
-    const url = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
-    document.getElementById("scene-video").innerHTML = `<video src="${url}" controls class="w-full h-full"></video>`;
-    alert(`视频生成成功！版本: v${result.version}`);
+    const enqueue = await API.generateVideo(state.projectName, sceneId, prompt, scriptFile, duration);
+    registerTaskWaiter(enqueue.task_id, {
+      waiterKey: `scene-video:${scriptFile}:${sceneId}`,
+      onSuccess: (task) => {
+        void (async () => {
+          if (!isActiveSceneModal(sceneId, scriptFile)) return;
+          state.cacheBuster = Date.now();
+          const hasStoryboard = !!document.getElementById("scene-storyboard")?.querySelector("img");
+          await initSceneVersionControls(sceneId, scriptFile, hasStoryboard, true);
+
+          const filePath = task?.result?.file_path;
+          if (filePath) {
+            const url = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+            document.getElementById("scene-video").innerHTML = `<video src="${url}" controls class="w-full h-full"></video>`;
+          }
+
+          updateGenerateButton(btn, true, false);
+          loadingEl.classList.add("hidden");
+          const version = task?.result?.version;
+          alert(version ? `视频生成成功！版本: v${version}` : "视频生成成功！");
+        })();
+      },
+      onFailed: (task) => {
+        if (!isActiveSceneModal(sceneId, scriptFile)) return;
+        updateGenerateButton(btn, hadVideo, false);
+        loadingEl.classList.add("hidden");
+        alert("生成失败: " + taskErrorMessage(task));
+      },
+    });
+
+    if (enqueue.deduped) {
+      alert(`已有进行中的视频任务，已复用任务 ${enqueue.task_id.slice(0, 10)}。`);
+    } else {
+      alert(`视频任务已入队，任务ID: ${enqueue.task_id.slice(0, 10)}`);
+    }
   } catch (error) {
-    alert("生成失败: " + error.message);
-  } finally {
-    updateGenerateButton(btn, succeeded || hadVideo, false);
+    updateGenerateButton(btn, hadVideo, false);
     loadingEl.classList.add("hidden");
+    alert("入队失败: " + error.message);
   }
 }
 
@@ -467,14 +620,18 @@ async function restoreSceneVersion(resourceType, sceneId) {
 // ==================== 人物设计图版本和生成 ====================
 
 export async function initCharacterVersionControls(charName, hasImage) {
-  const versions = await loadVersions("characters", charName);
-  renderVersionSelector(document.getElementById("char-image-version"), versions.versions, versions.current_version);
+  if (!isCharacterModalContext(charName)) return;
 
   const btn = document.getElementById("char-generate-btn");
+  btn.onclick = () => void generateCharacterImage(charName);
+
+  const versions = await loadVersions("characters", charName);
+  if (!isCharacterModalContext(charName)) return;
+  renderVersionSelector(document.getElementById("char-image-version"), versions.versions, versions.current_version);
+
   updateGenerateButton(btn, hasImage);
 
   document.getElementById("char-image-version").onchange = () => void handleCharacterVersionChange(charName);
-  btn.onclick = () => void generateCharacterImage(charName);
   document.getElementById("char-restore-btn").onclick = () => void restoreCharacterVersion(charName);
 
   updateRestoreButton(document.getElementById("char-restore-btn"), document.getElementById("char-image-version"), versions.current_version);
@@ -508,6 +665,8 @@ async function handleCharacterVersionChange(charName) {
 }
 
 async function generateCharacterImage(charName) {
+  if (!isActiveCharacterModal(charName)) return;
+
   const prompt = document.getElementById("char-description").value;
   if (!prompt.trim()) {
     alert("请输入人物描述");
@@ -517,25 +676,50 @@ async function generateCharacterImage(charName) {
   const btn = document.getElementById("char-generate-btn");
   const loadingEl = document.getElementById("char-image-loading");
   const hadImage = !document.getElementById("char-image-preview").classList.contains("hidden");
-  let succeeded = false;
+  updateGenerateButton(btn, hadImage, true);
+  loadingEl.classList.remove("hidden");
 
   try {
-    updateGenerateButton(btn, hadImage, true);
-    loadingEl.classList.remove("hidden");
-    const result = await API.generateCharacter(state.projectName, charName, prompt);
-    succeeded = true;
-    state.cacheBuster = Date.now();
-    await initCharacterVersionControls(charName, true);
-    const url = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
-    const previewEl = document.getElementById("char-image-preview");
-    previewEl.querySelector("img").src = url;
-    previewEl.classList.remove("hidden");
-    alert(`人物设计图生成成功！版本: v${result.version}`);
+    const enqueue = await API.generateCharacter(state.projectName, charName, prompt);
+    registerTaskWaiter(enqueue.task_id, {
+      waiterKey: `character:${charName}`,
+      onSuccess: (task) => {
+        void (async () => {
+          if (!isActiveCharacterModal(charName)) return;
+          state.cacheBuster = Date.now();
+          await initCharacterVersionControls(charName, true);
+
+          const filePath = task?.result?.file_path;
+          if (filePath) {
+            const url = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+            const previewEl = document.getElementById("char-image-preview");
+            previewEl.querySelector("img").src = url;
+            previewEl.classList.remove("hidden");
+          }
+
+          updateGenerateButton(btn, true, false);
+          loadingEl.classList.add("hidden");
+          const version = task?.result?.version;
+          alert(version ? `人物设计图生成成功！版本: v${version}` : "人物设计图生成成功！");
+        })();
+      },
+      onFailed: (task) => {
+        if (!isActiveCharacterModal(charName)) return;
+        updateGenerateButton(btn, hadImage, false);
+        loadingEl.classList.add("hidden");
+        alert("生成失败: " + taskErrorMessage(task));
+      },
+    });
+
+    if (enqueue.deduped) {
+      alert(`已有进行中的人物任务，已复用任务 ${enqueue.task_id.slice(0, 10)}。`);
+    } else {
+      alert(`人物设计图任务已入队，任务ID: ${enqueue.task_id.slice(0, 10)}`);
+    }
   } catch (error) {
-    alert("生成失败: " + error.message);
-  } finally {
-    updateGenerateButton(btn, succeeded || hadImage, false);
+    updateGenerateButton(btn, hadImage, false);
     loadingEl.classList.add("hidden");
+    alert("入队失败: " + error.message);
   }
 }
 
@@ -564,14 +748,18 @@ async function restoreCharacterVersion(charName) {
 // ==================== 线索设计图版本和生成 ====================
 
 export async function initClueVersionControls(clueName, hasImage) {
-  const versions = await loadVersions("clues", clueName);
-  renderVersionSelector(document.getElementById("clue-image-version"), versions.versions, versions.current_version);
+  if (!isClueModalContext(clueName)) return;
 
   const btn = document.getElementById("clue-generate-btn");
+  btn.onclick = () => void generateClueImage(clueName);
+
+  const versions = await loadVersions("clues", clueName);
+  if (!isClueModalContext(clueName)) return;
+  renderVersionSelector(document.getElementById("clue-image-version"), versions.versions, versions.current_version);
+
   updateGenerateButton(btn, hasImage);
 
   document.getElementById("clue-image-version").onchange = () => void handleClueVersionChange(clueName);
-  btn.onclick = () => void generateClueImage(clueName);
   document.getElementById("clue-restore-btn").onclick = () => void restoreClueVersion(clueName);
 
   updateRestoreButton(document.getElementById("clue-restore-btn"), document.getElementById("clue-image-version"), versions.current_version);
@@ -605,6 +793,8 @@ async function handleClueVersionChange(clueName) {
 }
 
 async function generateClueImage(clueName) {
+  if (!isActiveClueModal(clueName)) return;
+
   const prompt = document.getElementById("clue-description").value;
   if (!prompt.trim()) {
     alert("请输入线索描述");
@@ -614,25 +804,50 @@ async function generateClueImage(clueName) {
   const btn = document.getElementById("clue-generate-btn");
   const loadingEl = document.getElementById("clue-image-loading");
   const hadImage = !document.getElementById("clue-image-preview").classList.contains("hidden");
-  let succeeded = false;
+  updateGenerateButton(btn, hadImage, true);
+  loadingEl.classList.remove("hidden");
 
   try {
-    updateGenerateButton(btn, hadImage, true);
-    loadingEl.classList.remove("hidden");
-    const result = await API.generateClue(state.projectName, clueName, prompt);
-    succeeded = true;
-    state.cacheBuster = Date.now();
-    await initClueVersionControls(clueName, true);
-    const url = `${API.getFileUrl(state.projectName, result.file_path)}?t=${state.cacheBuster}`;
-    const previewEl = document.getElementById("clue-image-preview");
-    previewEl.querySelector("img").src = url;
-    previewEl.classList.remove("hidden");
-    alert(`线索设计图生成成功！版本: v${result.version}`);
+    const enqueue = await API.generateClue(state.projectName, clueName, prompt);
+    registerTaskWaiter(enqueue.task_id, {
+      waiterKey: `clue:${clueName}`,
+      onSuccess: (task) => {
+        void (async () => {
+          if (!isActiveClueModal(clueName)) return;
+          state.cacheBuster = Date.now();
+          await initClueVersionControls(clueName, true);
+
+          const filePath = task?.result?.file_path;
+          if (filePath) {
+            const url = `${API.getFileUrl(state.projectName, filePath)}?t=${state.cacheBuster}`;
+            const previewEl = document.getElementById("clue-image-preview");
+            previewEl.querySelector("img").src = url;
+            previewEl.classList.remove("hidden");
+          }
+
+          updateGenerateButton(btn, true, false);
+          loadingEl.classList.add("hidden");
+          const version = task?.result?.version;
+          alert(version ? `线索设计图生成成功！版本: v${version}` : "线索设计图生成成功！");
+        })();
+      },
+      onFailed: (task) => {
+        if (!isActiveClueModal(clueName)) return;
+        updateGenerateButton(btn, hadImage, false);
+        loadingEl.classList.add("hidden");
+        alert("生成失败: " + taskErrorMessage(task));
+      },
+    });
+
+    if (enqueue.deduped) {
+      alert(`已有进行中的线索任务，已复用任务 ${enqueue.task_id.slice(0, 10)}。`);
+    } else {
+      alert(`线索设计图任务已入队，任务ID: ${enqueue.task_id.slice(0, 10)}`);
+    }
   } catch (error) {
-    alert("生成失败: " + error.message);
-  } finally {
-    updateGenerateButton(btn, succeeded || hadImage, false);
+    updateGenerateButton(btn, hadImage, false);
     loadingEl.classList.add("hidden");
+    alert("入队失败: " + error.message);
   }
 }
 

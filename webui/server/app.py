@@ -18,7 +18,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from webui.server.routers import projects, characters, clues, files, generate, versions, usage
+from lib.generation_worker import GenerationWorker
+from webui.server.routers import (
+    projects,
+    characters,
+    clues,
+    files,
+    generate,
+    versions,
+    usage,
+    tasks,
+)
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -44,6 +54,7 @@ app.include_router(files.router, prefix="/api/v1", tags=["文件管理"])
 app.include_router(generate.router, prefix="/api/v1", tags=["生成"])
 app.include_router(versions.router, prefix="/api/v1", tags=["版本管理"])
 app.include_router(usage.router, prefix="/api/v1", tags=["费用统计"])
+app.include_router(tasks.router, prefix="/api/v1", tags=["任务队列"])
 
 # 静态文件服务 - 前端页面
 webui_dir = Path(__file__).parent.parent
@@ -69,10 +80,32 @@ async def serve_usage():
     return FileResponse(webui_dir / "usage.html")
 
 
+@app.get("/queue.html", include_in_schema=False)
+async def serve_queue():
+    """服务全局队列页"""
+    return FileResponse(webui_dir / "queue.html")
+
+
 @app.get("/health")
 async def health_check():
     """健康检查"""
     return {"status": "ok", "message": "视频项目管理 WebUI 运行正常"}
+
+
+@app.on_event("startup")
+async def startup_generation_worker():
+    """启动任务 worker（单活由 lease 控制）。"""
+    worker = GenerationWorker()
+    app.state.generation_worker = worker
+    await worker.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_generation_worker():
+    """停止任务 worker。"""
+    worker = getattr(app.state, "generation_worker", None)
+    if worker:
+        await worker.stop()
 
 
 if __name__ == "__main__":

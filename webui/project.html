@@ -203,6 +203,30 @@
                             >0</span
                         >
                     </button>
+                    <button
+                        data-tab="queue"
+                        class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white"
+                    >
+                        <svg
+                            class="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M8 7h8m-8 5h8m-8 5h5M5 7h.01M5 12h.01M5 17h.01"
+                            />
+                        </svg>
+                        <span>任务队列</span>
+                        <span
+                            id="tasks-count"
+                            class="ml-auto text-xs bg-gray-700 px-2 py-0.5 rounded-full"
+                            >0</span
+                        >
+                    </button>
                 </nav>
             </aside>
 
@@ -727,6 +751,83 @@
                     <div id="episodes-list" class="space-y-4">
                         <!-- 剧集列表将通过 JS 插入 -->
                     </div>
+                </div>
+
+                <!-- 队列 Tab -->
+                <div id="tab-queue" class="tab-content hidden">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold">当前项目任务队列</h2>
+                        <a
+                            href="/queue.html"
+                            class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
+                        >
+                            打开全局队列
+                        </a>
+                    </div>
+
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-gray-800 rounded-lg p-4">
+                            <div class="text-xs text-gray-400">排队中</div>
+                            <div
+                                id="project-queue-stat-queued"
+                                class="text-2xl font-semibold text-yellow-300 mt-1"
+                            >
+                                0
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 rounded-lg p-4">
+                            <div class="text-xs text-gray-400">执行中</div>
+                            <div
+                                id="project-queue-stat-running"
+                                class="text-2xl font-semibold text-blue-300 mt-1"
+                            >
+                                0
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 rounded-lg p-4">
+                            <div class="text-xs text-gray-400">成功</div>
+                            <div
+                                id="project-queue-stat-succeeded"
+                                class="text-2xl font-semibold text-green-300 mt-1"
+                            >
+                                0
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 rounded-lg p-4">
+                            <div class="text-xs text-gray-400">失败</div>
+                            <div
+                                id="project-queue-stat-failed"
+                                class="text-2xl font-semibold text-red-300 mt-1"
+                            >
+                                0
+                            </div>
+                        </div>
+                    </div>
+
+                    <section class="bg-gray-800 rounded-lg p-4">
+                        <div
+                            id="project-task-empty"
+                            class="text-sm text-gray-500 py-8 text-center"
+                        >
+                            暂无任务
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="text-gray-400 border-b border-gray-700">
+                                    <tr>
+                                        <th class="px-3 py-2">任务ID</th>
+                                        <th class="px-3 py-2">类型</th>
+                                        <th class="px-3 py-2">资源</th>
+                                        <th class="px-3 py-2">状态</th>
+                                        <th class="px-3 py-2">开始时间</th>
+                                        <th class="px-3 py-2">结束时间</th>
+                                        <th class="px-3 py-2">结果/错误</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="project-task-list"></tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
             </main>
         </div>
@@ -2071,6 +2172,7 @@
         </div>
 
         <!-- JavaScript -->
+        <script src="/js/toast.js"></script>
         <script src="/js/api.js"></script>
         <script type="module" src="/js/project.js"></script>
     </body>
