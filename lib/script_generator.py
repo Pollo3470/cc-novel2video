@@ -158,11 +158,22 @@ class ScriptGenerator:
 
     def _load_step1(self, episode: int) -> str:
         """加载 Step 1 的 Markdown 文件"""
-        path = self.project_path / "drafts" / f"episode_{episode}" / "step1_segments.md"
-        if not path.exists():
-            raise FileNotFoundError(f"未找到 Step 1 文件: {path}")
+        drafts_path = self.project_path / "drafts" / f"episode_{episode}"
+        if self.content_mode == "narration":
+            primary_path = drafts_path / "step1_segments.md"
+            fallback_path = drafts_path / "step1_normalized_script.md"
+        else:
+            primary_path = drafts_path / "step1_normalized_script.md"
+            fallback_path = drafts_path / "step1_segments.md"
 
-        with open(path, "r", encoding="utf-8") as f:
+        if not primary_path.exists():
+            if fallback_path.exists():
+                print(f"⚠️ 未找到 Step 1 文件: {primary_path}，改用 {fallback_path}")
+                primary_path = fallback_path
+            else:
+                raise FileNotFoundError(f"未找到 Step 1 文件: {primary_path}")
+
+        with open(primary_path, "r", encoding="utf-8") as f:
             return f.read()
 
     def _parse_response(self, response_text: str, episode: int) -> dict:
